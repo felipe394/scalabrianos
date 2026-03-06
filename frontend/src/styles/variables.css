@@ -1,0 +1,15 @@
+:root {
+    --primary: #1d4ed8;
+    /* Darker blue */
+    --primary-light: #eff6ff;
+    --bg-color: #f8fafc;
+    --text-main: #1e293b;
+    --sidebar-bg: #1d4ed8;
+    /* Darker blue matching header */
+    --sidebar-text: #ffffff;
+    --header-bg: #1d4ed8;
+    /* Darker blue matching sidebar */
+    --header-text: #ffffff;
+    --white: #ffffff;
+    --accent: #ffffff;
+}
