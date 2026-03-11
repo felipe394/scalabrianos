@@ -1,15 +1,17 @@
 :root {
-    --primary: #1d4ed8;
-    /* Darker blue */
-    --primary-light: #eff6ff;
-    --bg-color: #f8fafc;
-    --text-main: #1e293b;
-    --sidebar-bg: #1d4ed8;
-    /* Darker blue matching header */
-    --sidebar-text: #ffffff;
-    --header-bg: #1d4ed8;
-    /* Darker blue matching sidebar */
-    --header-text: #ffffff;
+    --primary: #013375;
+    --primary-hover: #00285a;
+    /* Institutional Blue */
+    --primary-light: #EEF5FE;
+    /* Support Light Blue */
+    --bg-color: #F8FAFC;
+    --text-main: #231F20;
+    /* Neutral Dark */
+    --sidebar-bg: #ffffff;
+    --sidebar-text: #231F20;
+    --header-bg: #ffffff;
+    --header-text: #013375;
     --white: #ffffff;
-    --accent: #ffffff;
+    --accent: #013375;
+    --border-color: #E2E8F0;
 }

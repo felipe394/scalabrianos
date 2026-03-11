@@ -1,31 +1,109 @@
-import React from 'react';
-import { Settings, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
+  User, MapPin, BookOpen, Milestone, PieChart, FileText, GraduationCap,
+  Briefcase, School, Lock
+} from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import '../../styles/Sidebar.css';
+
+interface SubItem {
+  icon: React.ReactNode;
+  label: string;
+  path: string;
+  subItems?: SubItem[];
+}
+
+interface MenuItem {
+  icon: React.ReactNode;
+  label: string;
+  path?: string;
+  subItems?: SubItem[];
+}
 
 const Sidebar: React.FC = () => {
   const { isSidebarOpen } = useLayout();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    'Administração': true,
+    'Itinerário Formativo': false
+  });
 
-  const menuItems = [
-    { icon: <Settings size={20} />, label: 'Administração', active: true, path: '/home' },
+  const toggleSection = (label: string) => {
+    setOpenSections(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const menuItems: MenuItem[] = [
+    { icon: <HomeIcon size={20} />, label: 'Home', path: '/home' },
+    {
+      label: 'Administração',
+      icon: <Settings size={20} />,
+      subItems: [
+        { icon: <Lock size={18} />, label: 'Perfis', path: '/perfis' },
+        { icon: <User size={18} />, label: 'Dados Civis', path: '/dados-civis' },
+        { icon: <MapPin size={18} />, label: 'Endereço e Telefones', path: '/endereco-telefones' },
+        { icon: <BookOpen size={18} />, label: 'Dados Religiosos', path: '/dados-religiosos' },
+        {
+          icon: <Milestone size={18} />,
+          label: 'Itinerário Formativo',
+          path: '/itinerario-formativo',
+          subItems: [
+            { icon: <School size={16} />, label: 'Seminários', path: '/itinerario/seminarios' },
+            { icon: <Briefcase size={16} />, label: 'Propedêutico', path: '/itinerario/propedeutico' },
+            { icon: <GraduationCap size={16} />, label: 'Filosofia', path: '/itinerario/filosofia' },
+            { icon: <FileText size={16} />, label: 'Postulado', path: '/itinerario/postulado' },
+          ]
+        },
+      ]
+    },
+    { icon: <HomeIcon size={20} />, label: 'Casas Religiosas', path: '/casas-religiosas' },
+    { icon: <PieChart size={20} />, label: 'Relatórios', path: '/relatorios' },
   ];
 
   if (!isSidebarOpen) return null;
 
-  return (
-    <div className="sidebar">
-      <div className="sidebar-items">
-        {menuItems.map((item, index) => (
+  const renderMenuItems = (items: (MenuItem | SubItem)[], level = 0) => {
+    return items.map((item, index) => {
+      const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
+      const isOpen = openSections[item.label];
+      const isActive = item.path ? location.pathname === item.path : false;
+
+      return (
+        <div key={index} className="menu-node">
           <div
-            key={index}
-            className={`sidebar-item ${item.active ? 'active' : ''}`}
-            onClick={() => navigate(item.path)}
+            className={`sidebar-item level-${level} ${isActive ? 'active' : ''}`}
+            onClick={() => {
+              if (hasSubItems) {
+                toggleSection(item.label);
+              } else if (item.path) {
+                navigate(item.path);
+              }
+            }}
           >
             <span className="item-icon">{item.icon}</span>
             <span className="item-label">{item.label}</span>
+            {hasSubItems && (
+              <span className="chevron">
+                {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </span>
+            )}
           </div>
-        ))}
+          {hasSubItems && isOpen && (
+            <div className="sub-menu-container">
+              {renderMenuItems(item.subItems!, level + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="sidebar">
+      <div className="sidebar-items">
+        {renderMenuItems(menuItems)}
       </div>
 
       <div className="sidebar-footer">
@@ -35,74 +113,6 @@ const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      <style>{`
-        .sidebar {
-          width: 240px;
-          height: 100vh;
-          background-color: var(--sidebar-bg);
-          color: white;
-          display: flex;
-          flex-direction: column;
-          padding: 1rem 0;
-          position: fixed;
-          left: 0;
-          top: 0;
-          z-index: 90;
-          transition: transform 0.3s ease;
-        }
-
-        .sidebar-items {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          margin-top: 70px; /* Ensure items start below header */
-          padding-top: 1rem;
-        }
-
-        .sidebar-item {
-          display: flex;
-          align-items: center;
-          padding: 0.75rem 1.5rem;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          gap: 1rem;
-          color: #ffffff; /* Explicit white for visibility */
-          opacity: 0.9;
-        }
-
-        .sidebar-item:hover {
-          background-color: rgba(255, 255, 255, 0.1);
-          opacity: 1;
-        }
-
-        .sidebar-item.active {
-          background-color: rgba(255, 255, 255, 0.2);
-          opacity: 1;
-          border-left: 4px solid white;
-        }
-
-        .item-icon {
-          display: flex;
-          align-items: center;
-          color: white;
-        }
-
-        .item-label {
-          font-size: 0.95rem;
-          font-weight: 600;
-          color: white;
-        }
-
-        .sidebar-footer {
-          border-top: 1px solid rgba(255, 255, 255, 0.2);
-          padding-top: 0.5rem;
-          margin-bottom: 2rem;
-        }
-
-        .logout {
-          color: white;
-        }
-      `}</style>
     </div>
   );
 };
