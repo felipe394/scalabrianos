@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import logoVertical from '../assets/logo_vertical.png';
 import '../styles/Login.css';
 
 const Login: React.FC = () => {
@@ -21,7 +22,7 @@ const Login: React.FC = () => {
       <div className="login-overlay"></div>
       <div className="login-content">
         <div className="login-logo-container">
-          <img src="/src/assets/logo_vertical.png" alt="Scalabrianos Logo" className="login-logo" />
+          <img src={logoVertical} alt="Scalabrianos Logo" className="login-logo" />
         </div>
 
         <form className="login-form" onSubmit={handleLogin}>

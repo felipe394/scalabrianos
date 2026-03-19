@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import logoVertical from '../assets/logo_vertical.png';
 import '../styles/Login.css'; // Reusing Login styles for layout
 
 const ForgotPassword: React.FC = () => {
@@ -19,7 +20,7 @@ const ForgotPassword: React.FC = () => {
             <div className="login-overlay"></div>
             <div className="login-content">
                 <div className="login-logo-container">
-                    <img src="/src/assets/logo_vertical.png" alt="Scalabrianos Logo" className="login-logo" />
+                    <img src={logoVertical} alt="Scalabrianos Logo" className="login-logo" />
                 </div>
 
                 {!isSent ? (
