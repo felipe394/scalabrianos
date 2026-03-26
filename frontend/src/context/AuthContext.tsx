@@ -1,26 +1,68 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 export type UserRole = 'ADMIN_GERAL' | 'ADMINISTRADOR' | 'COLABORADOR' | 'INTERMITENTE';
 
+interface User {
+    id: number;
+    nome: string;
+    email: string;
+    role: UserRole;
+}
+
 interface AuthContextType {
-    userRole: UserRole;
-    setRole: (role: UserRole) => void;
+    user: User | null;
+    userRole: UserRole | null;
+    token: string | null;
+    login: (userData: User, token: string) => void;
+    logout: () => void;
     canEdit: boolean;
     isAdminGeral: boolean;
+    isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Defaulting to ADMIN_GERAL for development
-    const [userRole, setUserRole] = useState<UserRole>('ADMIN_GERAL');
+    const [user, setUser] = useState<User | null>(null);
+    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
-    const setRole = (role: UserRole) => setUserRole(role);
+    useEffect(() => {
+        const savedUser = localStorage.getItem('user');
+        if (savedUser && token) {
+            setUser(JSON.parse(savedUser));
+        }
+    }, [token]);
+
+    const login = (userData: User, authToken: string) => {
+        setUser(userData);
+        setToken(authToken);
+        localStorage.setItem('token', authToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+    };
+
+    const logout = () => {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+    };
+
+    const userRole = user?.role || null;
     const isAdminGeral = userRole === 'ADMIN_GERAL';
-    const canEdit = isAdminGeral || userRole === 'ADMINISTRADOR'; // Admins can also edit some things now
+    const canEdit = isAdminGeral || userRole === 'ADMINISTRADOR';
+    const isAuthenticated = !!token;
 
     return (
-        <AuthContext.Provider value={{ userRole, setRole, canEdit, isAdminGeral }}>
+        <AuthContext.Provider value={{ 
+            user, 
+            userRole, 
+            token, 
+            login, 
+            logout, 
+            canEdit, 
+            isAdminGeral, 
+            isAuthenticated 
+        }}>
             {children}
         </AuthContext.Provider>
     );

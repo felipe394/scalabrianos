@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { Search, Filter, Lock, Eye, X, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Lock, Eye, EyeOff, X, Save, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth, type UserRole } from '../context/AuthContext';
+import api from '../api';
 import '../styles/Perfis.css';
 
 interface UserProfile {
   id: number;
   nome: string;
   login: string;
+  password?: string;
   role: UserRole;
   status: 'ATIVO' | 'INATIVO';
   situacao: 'ATIVO' | 'FALECIDO' | 'EGRESSO' | 'EXCLAUSTRADO';
@@ -14,15 +16,32 @@ interface UserProfile {
 
 const Perfis: React.FC = () => {
   const { canEdit } = useAuth();
-  const [profiles, setProfiles] = useState<UserProfile[]>([
-    { id: 1, nome: 'Roberto Kalili', login: 'roberto.kalili@connectortech.com.br', role: 'ADMIN_GERAL', status: 'ATIVO', situacao: 'ATIVO' },
-    { id: 2, nome: 'Elias Bernardo', login: 'elias.bernardo@beltis.com.br', role: 'ADMINISTRADOR', status: 'ATIVO', situacao: 'ATIVO' },
-    { id: 3, nome: 'Felipe Sousa', login: 'felipe.sousa@connectortech.com.br', role: 'COLABORADOR', status: 'ATIVO', situacao: 'ATIVO' },
-    { id: 4, nome: 'João da Silva', login: 'joao.silva@exemplo.com', role: 'INTERMITENTE', status: 'INATIVO', situacao: 'EGRESSO' },
-  ]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    fetchProfiles();
+  }, []);
+
+  const fetchProfiles = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get('/usuarios');
+      setProfiles(response.data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error fetching profiles:', err);
+      setError('Erro ao carregar perfis');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
@@ -44,6 +63,7 @@ const Perfis: React.FC = () => {
       id: 0,
       nome: '',
       login: '',
+      password: '',
       role: 'COLABORADOR',
       status: 'ATIVO',
       situacao: 'ATIVO'
@@ -51,16 +71,25 @@ const Perfis: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProfile) {
+    if (!editingProfile) return;
+
+    setSaveLoading(true);
+    try {
       if (editingProfile.id === 0) {
-        setProfiles([...profiles, { ...editingProfile, id: profiles.length + 1 }]);
+        await api.post('/usuarios', editingProfile);
       } else {
-        setProfiles(profiles.map(p => p.id === editingProfile.id ? editingProfile : p));
+        await api.put(`/usuarios/${editingProfile.id}`, editingProfile);
       }
+      await fetchProfiles();
       setIsModalOpen(false);
       setEditingProfile(null);
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      alert('Erro ao salvar perfil');
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -100,50 +129,63 @@ const Perfis: React.FC = () => {
         </button>
       </div>
 
-      <div className="data-table">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Nome</th>
-              <th>Login (E-mail)</th>
-              <th>Perfil</th>
-              <th>Status</th>
-              <th>Situação</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiles.map((profile) => (
-              <tr key={profile.id}>
-                <td>#{profile.id}</td>
-                <td className="bold">{profile.nome}</td>
-                <td>{profile.login}</td>
-                <td>
-                  <span className={`role-tag ${profile.role.toLowerCase()}`}>
-                    {getRoleLabel(profile.role)}
-                  </span>
-                </td>
-                <td>
-                  <span className={`status-tag ${profile.status.toLowerCase()}`}>
-                    {profile.status}
-                  </span>
-                </td>
-                <td>
-                  <span className={`situacao-tag ${profile.situacao.toLowerCase()}`}>
-                    {profile.situacao}
-                  </span>
-                </td>
-                <td>
-                  <button className="btn-icon-view" title="Visualizar" onClick={() => handleOpenEdit(profile)}>
-                    <Eye size={18} />
-                  </button>
-                </td>
+      {isLoading ? (
+        <div className="loading-state">
+          <Loader2 className="animate-spin" size={32} />
+          <p>Carregando perfis...</p>
+        </div>
+      ) : error ? (
+        <div className="error-state">
+          <AlertCircle size={32} />
+          <p>{error}</p>
+          <button onClick={fetchProfiles} className="btn-retry">Tentar novamente</button>
+        </div>
+      ) : (
+        <div className="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Login (E-mail)</th>
+                <th className="center">Perfil</th>
+                <th className="center">Status</th>
+                <th className="center">Situação</th>
+                <th>Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {profiles.map((profile) => (
+                <tr key={profile.id}>
+                  <td>#{profile.id}</td>
+                  <td className="bold">{profile.nome}</td>
+                  <td>{profile.login}</td>
+                  <td className="center">
+                    <span className={`role-tag ${profile.role.toLowerCase()}`}>
+                      {getRoleLabel(profile.role)}
+                    </span>
+                  </td>
+                  <td className="center">
+                    <span className={`status-tag ${profile.status.toLowerCase()}`}>
+                      {profile.status}
+                    </span>
+                  </td>
+                  <td className="center">
+                    <span className={`situacao-tag ${profile.situacao.toLowerCase()}`}>
+                      {profile.situacao}
+                    </span>
+                  </td>
+                  <td>
+                    <button className="btn-icon-view" title="Visualizar" onClick={() => handleOpenEdit(profile)}>
+                      <Eye size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {isModalOpen && editingProfile && (
         <div className="modal-overlay">
@@ -174,6 +216,25 @@ const Perfis: React.FC = () => {
                 />
               </div>
               <div className="form-group">
+                <label>{editingProfile.id === 0 ? 'Senha' : 'Nova Senha (deixe em branco para manter)'}</label>
+                <div className="password-group">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={editingProfile.password || ''}
+                    onChange={(e) => setEditingProfile({ ...editingProfile, password: e.target.value })}
+                    required={editingProfile.id === 0}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+              <div className="form-group">
                 <label>Perfil / Cargo</label>
                 <select
                   value={editingProfile.role}
@@ -197,8 +258,8 @@ const Perfis: React.FC = () => {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-save">
-                  <Save size={18} />
+                <button type="submit" className="btn-save" disabled={saveLoading}>
+                  {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                   {editingProfile.id === 0 ? 'Criar Perfil' : 'Salvar Alterações'}
                 </button>
               </div>

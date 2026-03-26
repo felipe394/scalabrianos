@@ -1,5 +1,5 @@
 .header {
-    height: 70px;
+    height: 100px;
     background-color: var(--header-bg);
     color: var(--text-main);
     display: flex;
@@ -43,7 +43,7 @@
 }
 
 .header-logo {
-    height: 50px;
+    height: 80px;
     width: auto;
     object-fit: contain;
 }

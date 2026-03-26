@@ -279,5 +279,6 @@ td {
 }
 
 .btn-save:hover {
-    background-color: var(--header-bg);
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
 }

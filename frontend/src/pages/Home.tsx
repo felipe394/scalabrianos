@@ -1,34 +1,62 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users, Home as HouseIcon, FileText, Activity,
-  UserCheck, UserMinus, ShieldCheck
+  UserCheck, UserMinus, ShieldCheck, Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api';
 import '../styles/Home.css';
+
+interface DashboardStats {
+  totalUsers: number;
+  totalHouses: number;
+  totalItineraries: number;
+  recentActivities: Array<{ id: number, user: string, activity: string, time: string }>;
+}
 
 const Home: React.FC = () => {
   const { userRole } = useAuth();
+  const [statsData, setStatsData] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/api/stats');
+      setStatsData(response.data);
+    } catch (err) {
+      console.error('Error fetching dashboard stats:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const stats = [
-    { label: 'Total de Membros', value: '142', icon: <Users size={24} />, color: '#013375' },
-    { label: 'Casas Religiosas', value: '12', icon: <HouseIcon size={24} />, color: '#013375' },
+    { label: 'Total de Membros', value: statsData?.totalUsers.toString() || '0', icon: <Users size={24} />, color: '#013375' },
+    { label: 'Casas Religiosas', value: statsData?.totalHouses.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
     { label: 'Documentos Anexados', value: '458', icon: <FileText size={24} />, color: '#013375' },
-    { label: 'Em Formação', value: '28', icon: <Activity size={24} />, color: '#013375' },
+    { label: 'Etapas de Formação', value: statsData?.totalItineraries.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
   ];
 
-  const recentActivities = [
-    { id: 1, user: 'Roberto Kalili', activity: 'Atualizou dados civis', time: 'Há 10 minutos', status: 'check' },
-    { id: 2, user: 'Elias Bernardo', activity: 'Adicionou novo documento', time: 'Há 25 minutos', status: 'plus' },
-    { id: 3, user: 'Felipe Sousa', activity: 'Alterou status de residência', time: 'Há 1 hora', status: 'edit' },
-  ];
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <Loader2 className="animate-spin" size={48} />
+        <p>Carregando dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="home-container">
       <div className="page-header">
         <div className="title-with-badge">
           <h2>Dashboard Overview</h2>
-          <span className={`role-badge ${userRole.toLowerCase()}`}>
-            <ShieldCheck size={14} /> {userRole.replace('_', ' ')}
+          <span className={`role-badge ${(userRole || '').toLowerCase()}`}>
+            <ShieldCheck size={14} /> {(userRole || '').replace('_', ' ')}
           </span>
         </div>
       </div>
@@ -53,7 +81,7 @@ const Home: React.FC = () => {
             <h3>Atividades Recentes</h3>
           </div>
           <div className="activity-list">
-            {recentActivities.map((act) => (
+            {(statsData?.recentActivities || []).map((act) => (
               <div key={act.id} className="activity-item">
                 <div className="activity-avatar">
                   {act.user.charAt(0)}

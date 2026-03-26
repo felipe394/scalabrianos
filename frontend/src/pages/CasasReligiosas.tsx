@@ -1,30 +1,48 @@
-import React, { useState, useMemo } from 'react';
-import { Eye, Save, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Eye, Save, X, Loader2, AlertCircle } from 'lucide-react';
+import api from '../api';
 import '../styles/CasasReligiosas.css';
 
 interface ReligiousHouse {
   id: number;
-  name: string;
-  address: string;
+  nome: string;
+  endereco: string;
   status: 'ATIVO' | 'INATIVO';
 }
 
 const CasasReligiosas: React.FC = () => {
-  const [houses, setHouses] = useState<ReligiousHouse[]>([
-    { id: 1, name: 'Casa Scalabriniana São Paulo', address: 'Rua das Missões, 123, São Paulo - SP', status: 'ATIVO' },
-    { id: 2, name: 'Seminário João XXIII', address: 'Av. Brasil, 456, Passo Fundo - RS', status: 'ATIVO' },
-    { id: 3, name: 'Centro de Apoio ao Migrante', address: 'Rua da Paz, 789, Curitiba - PR', status: 'INATIVO' },
-  ]);
+  const [houses, setHouses] = useState<ReligiousHouse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [filterName, setFilterName] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
 
   const [editingHouse, setEditingHouse] = useState<ReligiousHouse | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  useEffect(() => {
+    fetchHouses();
+  }, []);
+
+  const fetchHouses = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get('/casas-religiosas');
+      setHouses(response.data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error fetching houses:', err);
+      setError('Erro ao carregar casas religiosas');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredHouses = useMemo(() => {
     return houses.filter((house) => {
-      const matchesName = house.name.toLowerCase().includes(filterName.toLowerCase());
+      const matchesName = house.nome.toLowerCase().includes(filterName.toLowerCase());
       const matchesStatus = filterStatus === 'Todos' || house.status === filterStatus;
       return matchesName && matchesStatus;
     });
@@ -40,22 +58,30 @@ const CasasReligiosas: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSaveHouse = (e: React.FormEvent) => {
+  const handleSaveHouse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingHouse) {
+    if (!editingHouse) return;
+
+    setSaveLoading(true);
+    try {
       if (editingHouse.id === 0) {
-        // New house
-        setHouses([...houses, { ...editingHouse, id: houses.length + 1 }]);
+        await api.post('/casas-religiosas', editingHouse);
       } else {
-        setHouses(houses.map(h => h.id === editingHouse.id ? editingHouse : h));
+        await api.put(`/casas-religiosas/${editingHouse.id}`, editingHouse);
       }
+      await fetchHouses();
       setIsModalOpen(false);
       setEditingHouse(null);
+    } catch (err) {
+      console.error('Error saving house:', err);
+      alert('Erro ao salvar casa religiosa');
+    } finally {
+      setSaveLoading(false);
     }
   };
 
   const handleNewHouse = () => {
-    setEditingHouse({ id: 0, name: '', address: '', status: 'ATIVO' });
+    setEditingHouse({ id: 0, nome: '', endereco: '', status: 'ATIVO' });
     setIsModalOpen(true);
   };
 
@@ -93,37 +119,50 @@ const CasasReligiosas: React.FC = () => {
         <button className="btn-clear" onClick={handleClearFilters}>Limpar Filtros</button>
       </div>
 
-      <div className="data-table">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Nome</th>
-              <th>Endereço</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredHouses.map((house) => (
-              <tr key={house.id}>
-                <td className="id-cell">
-                  {house.id}
-                  <button className="view-btn" onClick={() => handleOpenEdit(house)}>
-                    <Eye size={16} />
-                  </button>
-                </td>
-                <td>{house.name}</td>
-                <td>{house.address}</td>
-                <td>
-                  <span className={`status-tag ${house.status.toLowerCase()}`}>
-                    {house.status}
-                  </span>
-                </td>
+      {isLoading ? (
+        <div className="loading-state">
+          <Loader2 className="animate-spin" size={32} />
+          <p>Carregando casas...</p>
+        </div>
+      ) : error ? (
+        <div className="error-state">
+          <AlertCircle size={32} />
+          <p>{error}</p>
+          <button onClick={fetchHouses} className="btn-retry">Tentar novamente</button>
+        </div>
+      ) : (
+        <div className="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nome</th>
+                <th>Endereço</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filteredHouses.map((house) => (
+                <tr key={house.id}>
+                  <td className="id-cell">
+                    {house.id}
+                    <button className="view-btn" onClick={() => handleOpenEdit(house)}>
+                      <Eye size={16} />
+                    </button>
+                  </td>
+                  <td>{house.nome}</td>
+                  <td>{house.endereco}</td>
+                  <td>
+                    <span className={`status-tag ${house.status.toLowerCase()}`}>
+                      {house.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {isModalOpen && editingHouse && (
         <div className="modal-overlay">
@@ -139,8 +178,8 @@ const CasasReligiosas: React.FC = () => {
                 <label>Nome da Casa</label>
                 <input
                   type="text"
-                  value={editingHouse.name}
-                  onChange={(e) => setEditingHouse({ ...editingHouse, name: e.target.value })}
+                  value={editingHouse.nome}
+                  onChange={(e) => setEditingHouse({ ...editingHouse, nome: e.target.value })}
                   required
                 />
               </div>
@@ -148,8 +187,8 @@ const CasasReligiosas: React.FC = () => {
                 <label>Endereço</label>
                 <input
                   type="text"
-                  value={editingHouse.address}
-                  onChange={(e) => setEditingHouse({ ...editingHouse, address: e.target.value })}
+                  value={editingHouse.endereco}
+                  onChange={(e) => setEditingHouse({ ...editingHouse, endereco: e.target.value })}
                   required
                 />
               </div>
@@ -166,8 +205,8 @@ const CasasReligiosas: React.FC = () => {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn-save">
-                  <Save size={18} />
+                <button type="submit" className="btn-save" disabled={saveLoading}>
+                  {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                   {editingHouse.id === 0 ? 'Criar Casa' : 'Salvar Alterações'}
                 </button>
               </div>
@@ -175,7 +214,6 @@ const CasasReligiosas: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

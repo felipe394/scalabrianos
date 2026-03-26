@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 import logoVertical from '../assets/logo_vertical.png';
 import '../styles/Login.css';
 
@@ -8,13 +10,37 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // For demo purposes, just navigate to home
-    console.log('Logging in with:', email, password);
-    navigate('/home');
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.post(`${API_URL}/login`, {
+        email,
+        password
+      });
+
+      if (response.data.success) {
+        login(response.data.user, response.data.token);
+        navigate('/home');
+      } else {
+        setError(response.data.message || 'Falha na autenticação');
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'Erro ao conectar ao servidor');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -26,6 +52,13 @@ const Login: React.FC = () => {
         </div>
 
         <form className="login-form" onSubmit={handleLogin}>
+          {error && (
+            <div className="error-message">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="input-group">
             <input
               type="email"
@@ -33,6 +66,7 @@ const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -43,6 +77,7 @@ const Login: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={isLoading}
             />
             <button
               type="button"
@@ -60,8 +95,8 @@ const Login: React.FC = () => {
             </label>
           </div>
 
-          <button type="submit" className="login-button">
-            Acessar
+          <button type="submit" className="login-button" disabled={isLoading}>
+            {isLoading ? 'Acessando...' : 'Acessar'}
           </button>
 
           <div className="login-footer">
@@ -69,7 +104,6 @@ const Login: React.FC = () => {
           </div>
         </form>
       </div>
-
     </div>
   );
 };
