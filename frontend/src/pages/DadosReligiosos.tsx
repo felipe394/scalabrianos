@@ -37,7 +37,7 @@ const DadosReligiosos: React.FC = () => {
   const fetchReligiousData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/usuarios/${user?.id}/dados-religiosos`);
+      const response = await api.post(`${API_URL}/usuarios/${user?.id}/dados-religiosos/get`);
       if (response.data) {
         const data = response.data;
         // Format dates

@@ -51,7 +51,7 @@ const DadosCivis: React.FC = () => {
   const fetchCivilData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/usuarios/${user?.id}/dados-civis`);
+      const response = await api.post(`${API_URL}/usuarios/${user?.id}/dados-civis/get`);
       if (response.data) {
         // Format date to YYYY-MM-DD for input type="date"
         const data = response.data;

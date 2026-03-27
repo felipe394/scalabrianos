@@ -31,7 +31,7 @@ const CasasReligiosas: React.FC = () => {
   const fetchHouses = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/casas-religiosas`);
+      const response = await api.post(`${API_URL}/casas-religiosas/get`);
       setHouses(response.data);
       setError(null);
     } catch (err: any) {

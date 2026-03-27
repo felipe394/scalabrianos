@@ -33,7 +33,7 @@ const ItinerarioFormativo: React.FC = () => {
   const fetchItinerary = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/usuarios/${user?.id}/itinerario`);
+      const response = await api.post(`${API_URL}/usuarios/${user?.id}/itinerario/get`);
       if (response.data && Array.isArray(response.data)) {
         const newStages = { ...stages };
         response.data.forEach((s: any) => {

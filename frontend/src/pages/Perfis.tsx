@@ -34,7 +34,7 @@ const Perfis: React.FC = () => {
   const fetchProfiles = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/usuarios`);
+      const response = await api.post(`${API_URL}/usuarios/get`);
       setProfiles(response.data);
       setError(null);
     } catch (err: any) {

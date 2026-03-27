@@ -41,7 +41,7 @@ const EnderecoTelefone: React.FC = () => {
   const fetchAddressData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`${API_URL}/usuarios/${user?.id}/endereco-contato`);
+      const response = await api.post(`${API_URL}/usuarios/${user?.id}/endereco-contato/get`);
       if (response.data) {
         setFormData(prev => ({ ...prev, ...response.data }));
       }
