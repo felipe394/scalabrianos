@@ -39,7 +39,7 @@ const EnderecoTelefone: React.FC = () => {
   const fetchAddressData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`/usuarios/${user?.id}/endereco-contato`);
+      const response = await api.get(`usuarios/${user?.id}/endereco-contato`);
       if (response.data) {
         setFormData(prev => ({ ...prev, ...response.data }));
       }
@@ -59,7 +59,7 @@ const EnderecoTelefone: React.FC = () => {
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      await api.post(`/usuarios/${user.id}/endereco-contato`, formData);
+      await api.post(`usuarios/${user.id}/endereco-contato`, formData);
       alert('Dados salvos com sucesso!');
     } catch (err) {
       console.error('Error saving address data:', err);

@@ -32,7 +32,7 @@ const Perfis: React.FC = () => {
   const fetchProfiles = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get('/usuarios');
+      const response = await api.get('usuarios');
       setProfiles(response.data);
       setError(null);
     } catch (err: any) {
@@ -78,9 +78,9 @@ const Perfis: React.FC = () => {
     setSaveLoading(true);
     try {
       if (editingProfile.id === 0) {
-        await api.post('/usuarios', editingProfile);
+        await api.post('usuarios', editingProfile);
       } else {
-        await api.put(`/usuarios/${editingProfile.id}`, editingProfile);
+        await api.put(`usuarios/${editingProfile.id}`, editingProfile);
       }
       await fetchProfiles();
       setIsModalOpen(false);

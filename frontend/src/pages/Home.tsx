@@ -25,7 +25,7 @@ const Home: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/api/stats');
+      const response = await api.get('stats');
       setStatsData(response.data);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);

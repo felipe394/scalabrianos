@@ -35,7 +35,7 @@ const DadosReligiosos: React.FC = () => {
   const fetchReligiousData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`/usuarios/${user?.id}/dados-religiosos`);
+      const response = await api.get(`usuarios/${user?.id}/dados-religiosos`);
       if (response.data) {
         const data = response.data;
         // Format dates
@@ -60,7 +60,7 @@ const DadosReligiosos: React.FC = () => {
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      await api.post(`/usuarios/${user.id}/dados-religiosos`, formData);
+      await api.post(`usuarios/${user.id}/dados-religiosos`, formData);
       alert('Dados salvos com sucesso!');
     } catch (err) {
       console.error('Error saving religious data:', err);

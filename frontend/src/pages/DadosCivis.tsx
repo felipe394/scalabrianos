@@ -49,7 +49,7 @@ const DadosCivis: React.FC = () => {
   const fetchCivilData = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`/usuarios/${user?.id}/dados-civis`);
+      const response = await api.get(`usuarios/${user?.id}/dados-civis`);
       if (response.data) {
         // Format date to YYYY-MM-DD for input type="date"
         const data = response.data;
@@ -74,7 +74,7 @@ const DadosCivis: React.FC = () => {
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      await api.post(`/usuarios/${user.id}/dados-civis`, formData);
+      await api.post(`usuarios/${user.id}/dados-civis`, formData);
       alert('Dados salvos com sucesso!');
     } catch (err) {
       console.error('Error saving civil data:', err);

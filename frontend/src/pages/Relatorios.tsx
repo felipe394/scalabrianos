@@ -28,7 +28,7 @@ const Relatorios: React.FC = () => {
     try {
       // For a full report, we might need a specialized endpoint or combine data.
       // For now, let's fetch basic user info.
-      const response = await api.get('/usuarios');
+      const response = await api.get('usuarios');
       setData(response.data);
       setError(null);
     } catch (err) {
