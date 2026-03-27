@@ -24,6 +24,8 @@ const Perfis: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
 
   useEffect(() => {
     fetchProfiles();
@@ -32,7 +34,7 @@ const Perfis: React.FC = () => {
   const fetchProfiles = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get('usuarios');
+      const response = await api.get(`${API_URL}/usuarios`);
       setProfiles(response.data);
       setError(null);
     } catch (err: any) {
@@ -78,9 +80,9 @@ const Perfis: React.FC = () => {
     setSaveLoading(true);
     try {
       if (editingProfile.id === 0) {
-        await api.post('usuarios', editingProfile);
+        await api.post(`${API_URL}/usuarios`, editingProfile);
       } else {
-        await api.put(`usuarios/${editingProfile.id}`, editingProfile);
+        await api.put(`${API_URL}/usuarios/${editingProfile.id}`, editingProfile);
       }
       await fetchProfiles();
       setIsModalOpen(false);

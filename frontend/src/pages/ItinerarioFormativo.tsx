@@ -22,6 +22,8 @@ const ItinerarioFormativo: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
+
   useEffect(() => {
     if (user?.id) {
       fetchItinerary();
@@ -31,7 +33,7 @@ const ItinerarioFormativo: React.FC = () => {
   const fetchItinerary = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get(`usuarios/${user?.id}/itinerario`);
+      const response = await api.get(`${API_URL}/usuarios/${user?.id}/itinerario`);
       if (response.data && Array.isArray(response.data)) {
         const newStages = { ...stages };
         response.data.forEach((s: any) => {
@@ -60,7 +62,7 @@ const ItinerarioFormativo: React.FC = () => {
     setIsSaving(true);
     try {
       const stagesArray = Object.values(stages).filter(s => s.local || s.periodo);
-      await api.post(`usuarios/${user.id}/itinerario`, { stages: stagesArray });
+      await api.post(`${API_URL}/usuarios/${user.id}/itinerario`, { stages: stagesArray });
       alert('Dados salvos com sucesso!');
     } catch (err) {
       console.error('Error saving itinerary:', err);

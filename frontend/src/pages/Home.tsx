@@ -19,13 +19,15 @@ const Home: React.FC = () => {
   const [statsData, setStatsData] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
+
   useEffect(() => {
     fetchStats();
   }, []);
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('stats');
+      const response = await api.get(`${API_URL}/stats`);
       setStatsData(response.data);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);

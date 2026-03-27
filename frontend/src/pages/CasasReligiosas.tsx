@@ -22,6 +22,8 @@ const CasasReligiosas: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
+
   useEffect(() => {
     fetchHouses();
   }, []);
@@ -29,7 +31,7 @@ const CasasReligiosas: React.FC = () => {
   const fetchHouses = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get('casas-religiosas');
+      const response = await api.get(`${API_URL}/casas-religiosas`);
       setHouses(response.data);
       setError(null);
     } catch (err: any) {
@@ -65,9 +67,9 @@ const CasasReligiosas: React.FC = () => {
     setSaveLoading(true);
     try {
       if (editingHouse.id === 0) {
-        await api.post('casas-religiosas', editingHouse);
+        await api.post(`${API_URL}/casas-religiosas`, editingHouse);
       } else {
-        await api.put(`casas-religiosas/${editingHouse.id}`, editingHouse);
+        await api.put(`${API_URL}/casas-religiosas/${editingHouse.id}`, editingHouse);
       }
       await fetchHouses();
       setIsModalOpen(false);

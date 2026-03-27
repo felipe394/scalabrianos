@@ -19,6 +19,8 @@ const Relatorios: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
+
   useEffect(() => {
     fetchReportData();
   }, []);
@@ -28,7 +30,7 @@ const Relatorios: React.FC = () => {
     try {
       // For a full report, we might need a specialized endpoint or combine data.
       // For now, let's fetch basic user info.
-      const response = await api.get('usuarios');
+      const response = await api.get(`${API_URL}/usuarios`);
       setData(response.data);
       setError(null);
     } catch (err) {
