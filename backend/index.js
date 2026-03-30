@@ -19,6 +19,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Diagnostic logging for all requests
+app.use((req, res, next) => {
+  console.log(`[BACKEND] ${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Middleware to verify JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -33,9 +39,15 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Scalabrianos API is running' });
+// Health check (Enhanced for diagnostic)
+app.use(['/api/health', '/health'], (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    version: '3.0.0-FINAL-FIX', 
+    message: 'API ATUALIZADA - SE VOCE VE ISSO O RESTART FUNCIONOU',
+    method: req.method,
+    url: req.originalUrl
+  });
 });
 
 // Login route
@@ -392,4 +404,15 @@ const seedAdmin = async () => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   await seedAdmin();
+});
+
+// Final catch-all for 404s (to distinguish from Apache 404)
+app.use((req, res) => {
+  console.log(`[404] No route for ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Route not found in Node.js', 
+    method: req.method, 
+    path: req.originalUrl,
+    hint: 'Check if the /api prefix is being handled correctly by the proxy'
+  });
 });
