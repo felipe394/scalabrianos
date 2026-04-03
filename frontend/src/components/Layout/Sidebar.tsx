@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  User, MapPin, BookOpen, Milestone, PieChart, FileText, GraduationCap,
-  Briefcase, School, Lock
+  Users, MapPin, BookOpen, Milestone, PieChart, FileText, GraduationCap,
+  Briefcase, School, Lock, ClipboardList
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -41,21 +41,9 @@ const Sidebar: React.FC = () => {
       label: 'Administração',
       icon: <Settings size={20} />,
       subItems: [
-        { icon: <Lock size={18} />, label: 'Perfis', path: '/perfis' },
-        { icon: <User size={18} />, label: 'Dados Civis', path: '/dados-civis' },
-        { icon: <MapPin size={18} />, label: 'Endereço e Telefones', path: '/endereco-telefones' },
-        { icon: <BookOpen size={18} />, label: 'Dados Religiosos', path: '/dados-religiosos' },
-        {
-          icon: <Milestone size={18} />,
-          label: 'Itinerário Formativo',
-          path: '/itinerario-formativo',
-          subItems: [
-            { icon: <School size={16} />, label: 'Seminários', path: '/itinerario/seminarios' },
-            { icon: <Briefcase size={16} />, label: 'Propedêutico', path: '/itinerario/propedeutico' },
-            { icon: <GraduationCap size={16} />, label: 'Filosofia', path: '/itinerario/filosofia' },
-            { icon: <FileText size={16} />, label: 'Postulado', path: '/itinerario/postulado' },
-          ]
-        },
+        { icon: <Lock size={18} />, label: 'Perfis (Admins)', path: '/administradores' },
+        { icon: <Users size={18} />, label: 'Cadastro de Missionário', path: '/missionarios' },
+        { icon: <ClipboardList size={18} />, label: 'Logs do Sistema', path: '/logs' },
       ]
     },
     { icon: <HomeIcon size={20} />, label: 'Casas Religiosas', path: '/casas-religiosas' },
@@ -68,7 +56,7 @@ const Sidebar: React.FC = () => {
     return items.map((item, index) => {
       const hasSubItems = 'subItems' in item && item.subItems && item.subItems.length > 0;
       const isOpen = openSections[item.label];
-      const isActive = item.path ? location.pathname === item.path : false;
+      const isActive = item.path ? location.pathname === item.path || location.pathname.startsWith(item.path + '/') : false;
 
       return (
         <div key={index} className="menu-node">

@@ -2,6 +2,7 @@ import { Menu, LogOut } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../assets/logo_vertical.png';
+import NotificationBell from './NotificationBell';
 import '../../styles/Header.css';
 
 const Header: React.FC = () => {
@@ -24,6 +25,7 @@ const Header: React.FC = () => {
       </div>
 
       <div className="header-right">
+        <NotificationBell />
         <div className="user-info" onClick={() => navigate('/login')}>
           <span>Admin</span>
           <LogOut size={20} className="logout-icon" />

@@ -1,0 +1,269 @@
+/* PerfilMissionario.css */
+.perfil-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 40vh;
+  gap: 16px;
+  color: #888;
+}
+
+.perfil-container {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.perfil-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.btn-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #ddd;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  transition: all 0.2s;
+}
+.btn-back:hover { background: #f5f5f5; border-color: #aaa; }
+
+.perfil-title-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.perfil-avatar {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #4a90e2, #2d6ac6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.perfil-title-area h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.status-badge, .oconomo-badge, .id-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.status-badge.ativo { background: #e8f5e9; color: #2e7d32; }
+.status-badge.falecido { background: #fce4ec; color: #c62828; }
+.status-badge.egresso { background: #fff3e0; color: #e65100; }
+.status-badge.exclaustrado { background: #ede7f6; color: #4527a0; }
+.oconomo-badge { background: #e3f2fd; color: #1565c0; }
+.id-badge { background: #f5f5f5; color: #777; }
+
+/* Tabs */
+.perfil-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e8e8e8;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color: #4a90e2; background: #f5f9ff; border-radius: 6px 6px 0 0; }
+.tab-btn.active { color: #4a90e2; border-bottom-color: #4a90e2; font-weight: 700; }
+
+/* Content */
+.tab-panel { display: flex; flex-direction: column; gap: 20px; }
+
+.section-card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #4a90e2;
+  margin: 0 0 16px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-grid-3 { grid-template-columns: 1fr; }
+}
+
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #888; letter-spacing: 0.4px; }
+.form-group input, .form-group select {
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  color: #333;
+  background: #fff;
+}
+.form-group input:focus, .form-group select:focus { outline: none; border-color: #4a90e2; }
+.form-group input:disabled { background: #f9f9f9; color: #666; }
+
+.tab-save-row { display: flex; justify-content: flex-end; }
+.btn-save-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-save-tab:hover { background: #2d6ac6; }
+.btn-save-tab:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Houses */
+.btn-add-casa {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.2s;
+}
+.btn-add-casa:hover { background: #4caf50; color: white; }
+
+.casas-list { display: flex; flex-direction: column; gap: 10px; }
+.casa-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  background: #fff;
+}
+.casa-ativa { border-left: 3px solid #4caf50; background: #f9fff9; }
+.casa-info { display: flex; flex-direction: column; flex: 1; gap: 2px; }
+.casa-nome { font-weight: 700; font-size: 15px; color: #333; }
+.casa-funcao { font-size: 12px; color: #888; font-style: italic; }
+.casa-periodo { font-size: 12px; color: #aaa; }
+.badge-atual { background: #e8f5e9; color: #2e7d32; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+.btn-remove-casa { background: transparent; border: none; color: #e57373; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s; }
+.btn-remove-casa:hover { background: #fce4ec; }
+
+.empty-msg { color: #aaa; font-size: 14px; text-align: center; padding: 24px 0; }
+
+/* Financials */
+.house-selector {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.lancamentos-list { display: flex; flex-direction: column; gap: 10px; }
+.lancamento-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  border-left: 4px solid transparent;
+  gap: 16px;
+}
+.lancamento-credito { border-left-color: #4caf50; }
+.lancamento-debito { border-left-color: #e57373; }
+.lancamento-info { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.lancamento-desc { font-weight: 600; font-size: 14px; }
+.lancamento-meta { font-size: 12px; color: #888; }
+.lancamento-apontamento { font-size: 12px; color: #ff6f00; background: #fff8e1; padding: 3px 8px; border-radius: 4px; margin-top: 4px; }
+.lancamento-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 160px; }
+.valor-tag { font-size: 16px; font-weight: 700; }
+.valor-tag.credito { color: #2e7d32; }
+.valor-tag.debito { color: #c62828; }
+.status-lancamento { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.status-pendente { color: #f57c00; }
+.status-verificado { color: #2e7d32; }
+.status-apontamento { color: #c62828; }
+.oconomo-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-verificar, .btn-apontar {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-verificar { background: #e8f5e9; color: #2e7d32; }
+.btn-verificar:hover { background: #4caf50; color: white; }
+.btn-apontar { background: #fff8e1; color: #e65100; }
+.btn-apontar:hover { background: #ff7043; color: white; }
+
+/* Logs acao colors */
+.role-tag.acao-criar { background: #e8f5e9; color: #2e7d32; }
+.role-tag.acao-editar { background: #e3f2fd; color: #1565c0; }
+.role-tag.acao-remover { background: #fce4ec; color: #c62828; }
+.role-tag.acao-default { background: #f5f5f5; color: #555; }

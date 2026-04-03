@@ -4,7 +4,31 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 require('dotenv').config();
+
+// Multer configuration for document uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'uploads', 'documentos');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `doc_${Date.now()}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+    if (allowed.includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
+    else cb(new Error('Tipo de arquivo não permitido. Use PDF, JPG ou PNG.'));
+  }
+});
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -18,6 +42,8 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Diagnostic logging for all requests
 app.use((req, res, next) => {
@@ -49,6 +75,19 @@ app.use(['/api/health', '/health'], (req, res) => {
     url: req.originalUrl
   });
 });
+
+// Logs helper function
+async function logAction(usuarioId, acao, tabela, detalhes) {
+  try {
+    await db.query('INSERT INTO tb_logs (usuario_id, acao, tabela_afetada, detalhes) VALUES (?, ?, ?, ?)', [usuarioId, acao, tabela, detalhes]);
+  } catch (err) { console.error('Error logging action:', err); }
+}
+
+async function createNotification(usuarioId, mensagem, tipo = 'INFO', linkPath = null) {
+  try {
+    await db.query('INSERT INTO tb_notificacoes (usuario_id, mensagem, tipo, link_path) VALUES (?, ?, ?, ?)', [usuarioId, mensagem, tipo, linkPath]);
+  } catch (err) { console.error('Error creating notification:', err); }
+};
 
 // Login route
 app.post('/api/login', async (req, res) => {
@@ -103,7 +142,7 @@ app.post('/api/login', async (req, res) => {
 // Users
 app.get('/api/usuarios', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao FROM tb_usuarios');
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo FROM tb_usuarios');
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -112,7 +151,7 @@ app.get('/api/usuarios', authenticateToken, async (req, res) => {
 
 app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao FROM tb_usuarios');
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo FROM tb_usuarios');
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -120,26 +159,29 @@ app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/usuarios', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   try {
+    console.log('Creating user:', { nome, login, role, status, situacao, is_oconomo });
     const [result] = await db.query(
-      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao) VALUES (?, ?, ?, ?, ?, ?)',
-      [nome, login, hashedPassword, role, status, situacao]
+      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao, is_oconomo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nome, login, hashedPassword, role, status, situacao, is_oconomo ? 1 : 0]
     );
+    await logAction(req.user.id, 'CRIO_USUARIO', 'tb_usuarios', `Criou usuario ${login}`);
     res.status(201).json({ id: result.insertId, ...req.body });
   } catch (error) {
+    console.error('Error creating user:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo } = req.body;
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?';
-    let params = [nome, login, role, status, situacao];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -151,6 +193,7 @@ app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
     params.push(id);
 
     await db.query(query, params);
+    await logAction(req.user.id, 'EDITOU_USUARIO', 'tb_usuarios', `Editou usuario ID ${id}`);
     res.json({ message: 'Usuário atualizado com sucesso' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -211,6 +254,7 @@ app.post('/api/usuarios/:id/dados-civis/get', authenticateToken, async (req, res
 app.post('/api/usuarios/:id/dados-civis', authenticateToken, async (req, res) => {
   const { data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte } = req.body;
   try {
+    console.log(`Updating/Inserting civil data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_civis WHERE usuario_id = ?', [req.params.id]);
     if (rows.length > 0) {
       await db.query(
@@ -225,7 +269,46 @@ app.post('/api/usuarios/:id/dados-civis', authenticateToken, async (req, res) =>
     }
     res.json({ success: true });
   } catch (error) {
+    console.error('Error in dados-civis:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/usuarios/:id/nacionalidades', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT nacionalidade FROM tb_nacionalidades WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows.map(r => r.nacionalidade));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/nacionalidades', authenticateToken, async (req, res) => {
+  const { nacionalidades } = req.body; // Array of strings
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    // Remove existing
+    await connection.query('DELETE FROM tb_nacionalidades WHERE usuario_id = ?', [req.params.id]);
+    
+    // Insert new ones
+    if (nacionalidades && nacionalidades.length > 0) {
+      for (const nac of nacionalidades) {
+        if (nac.trim()) {
+          await connection.query('INSERT INTO tb_nacionalidades (usuario_id, nacionalidade) VALUES (?, ?)', [req.params.id, nac.trim()]);
+        }
+      }
+    }
+    
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in nacionalidades:', error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    connection.release();
   }
 });
 
@@ -250,6 +333,7 @@ app.post('/api/usuarios/:id/dados-religiosos/get', authenticateToken, async (req
 app.post('/api/usuarios/:id/dados-religiosos', authenticateToken, async (req, res) => {
   const { primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante } = req.body;
   try {
+    console.log(`Updating/Inserting religious data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_religiosos WHERE usuario_id = ?', [req.params.id]);
     if (rows.length > 0) {
       await db.query(
@@ -264,6 +348,7 @@ app.post('/api/usuarios/:id/dados-religiosos', authenticateToken, async (req, re
     }
     res.json({ success: true });
   } catch (error) {
+    console.error('Error in dados-religiosos:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -289,6 +374,7 @@ app.post('/api/usuarios/:id/endereco-contato/get', authenticateToken, async (req
 app.post('/api/usuarios/:id/endereco-contato', authenticateToken, async (req, res) => {
   const { logradouro, complemento, bairro, cep, cidade_estado, celular_whatsapp, telefone_fixo, email_pessoal } = req.body;
   try {
+    console.log(`Updating/Inserting address for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_enderecos_contatos WHERE usuario_id = ?', [req.params.id]);
     if (rows.length > 0) {
       await db.query(
@@ -303,6 +389,7 @@ app.post('/api/usuarios/:id/endereco-contato', authenticateToken, async (req, re
     }
     res.json({ success: true });
   } catch (error) {
+    console.error('Error in endereco-contato:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -336,6 +423,247 @@ app.post('/api/usuarios/:id/itinerario', authenticateToken, async (req, res) => 
         [req.params.id, stage.etapa, stage.local, stage.periodo]
       );
     }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// --- New Endpoints ---
+app.get('/api/logs', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT l.*, u.nome as usuario_nome 
+      FROM tb_logs l 
+      LEFT JOIN tb_usuarios u ON l.usuario_id = u.id 
+      ORDER BY l.created_at DESC LIMIT 200
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT h.*, c.nome as casa_nome 
+      FROM tb_missionario_casas h 
+      JOIN tb_casas_religiosas c ON h.casa_id = c.id 
+      WHERE h.usuario_id = ? 
+      ORDER BY h.data_inicio DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res) => {
+  const { casa_id, data_inicio, data_fim, funcao, is_superior } = req.body;
+  try {
+    const dInicio = data_inicio ? data_inicio : null;
+    const dFim = data_fim ? data_fim : null;
+    const superior = is_superior ? 1 : 0;
+
+    const [result] = await db.query(
+      'INSERT INTO tb_missionario_casas (usuario_id, casa_id, data_inicio, data_fim, funcao, is_superior) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.params.id, casa_id, dInicio, dFim, funcao, superior]
+    );
+    await logAction(req.user.id, 'ADICIONOU_CASA', 'tb_missionario_casas', `Usuário ${req.params.id} vinculado à casa ${casa_id}`);
+    res.json({ success: true, id: result.insertId });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/usuarios/:id/casas-historico/:historico_id', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_missionario_casas WHERE id = ? AND usuario_id = ?', [req.params.historico_id, req.params.id]);
+    await logAction(req.user.id, 'REMOVER_CASA', 'tb_missionario_casas', `Removido vínculo de casa ${req.params.historico_id} do usuario ${req.params.id}`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/financas-casa/casa/:casa_id', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT f.*, u.nome as registrado_por_nome 
+      FROM tb_financas_casa f 
+      LEFT JOIN tb_usuarios u ON f.registrado_por = u.id 
+      WHERE f.casa_id = ? 
+      ORDER BY f.data DESC
+    `, [req.params.casa_id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/financas-casa', authenticateToken, async (req, res) => {
+  const { casa_id, descricao, valor, tipo_transacao, data, status } = req.body;
+  try {
+    const defaultStatus = status || 'PENDENTE';
+    const [result] = await db.query(
+      'INSERT INTO tb_financas_casa (casa_id, registrado_por, descricao, valor, tipo_transacao, data, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [casa_id, req.user.id, descricao, valor, tipo_transacao, data, defaultStatus]
+    );
+    await logAction(req.user.id, 'LANCAMENTO_FINANCEIRO', 'tb_financas_casa', `Lançamento de ${tipo_transacao} na casa ${casa_id} - R$ ${valor}`);
+    res.json({ success: true, id: result.insertId });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/financas-casa/:id', authenticateToken, async (req, res) => {
+  const { status, apontamento_texto } = req.body;
+  try {
+    // Get existing data to know who to notify
+    const [existing] = await db.query('SELECT registrado_por, descricao, casa_id FROM tb_financas_casa WHERE id = ?', [req.params.id]);
+    
+    await db.query(
+      'UPDATE tb_financas_casa SET status = ?, apontamento_texto = ? WHERE id = ?',
+      [status, apontamento_texto, req.params.id]
+    );
+    await logAction(req.user.id, 'ATUALIZAR_FINANCAS', 'tb_financas_casa', `Status atualizado para ${status} no lancamento ${req.params.id}`);
+    
+    // Notify user if it's an "Apontamento"
+    if (status === 'APONTAMENTO' && existing.length > 0) {
+      const msg = `Correção solicitada no lançamento: "${existing[0].descricao}". Motivo: ${apontamento_texto}`;
+      await createNotification(existing[0].registrado_por, msg, 'ALERTA', `/missionarios/${existing[0].registrado_por}`);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Consolidated Financial Report
+app.get('/api/financas-casa/relatorio', authenticateToken, async (req, res) => {
+  const { casa_id, status, data_inicio, data_fim } = req.query;
+  try {
+    let query = `
+      SELECT f.*, u.nome as registrado_por_nome, c.nome as casa_nome 
+      FROM tb_financas_casa f 
+      LEFT JOIN tb_usuarios u ON f.registrado_por = u.id 
+      LEFT JOIN tb_casas_religiosas c ON f.casa_id = c.id 
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (casa_id) { query += ' AND f.casa_id = ?'; params.push(casa_id); }
+    if (status) { query += ' AND f.status = ?'; params.push(status); }
+    if (data_inicio) { query += ' AND f.data >= ?'; params.push(data_inicio); }
+    if (data_fim) { query += ' AND f.data <= ?'; params.push(data_fim); }
+
+    query += ' ORDER BY f.data DESC, f.id DESC';
+
+    const [rows] = await db.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/financas-casa/sumario', authenticateToken, async (req, res) => {
+  const { casa_id, data_inicio, data_fim } = req.query;
+  try {
+    let query = 'SELECT tipo_transacao, SUM(valor) as total FROM tb_financas_casa WHERE 1=1';
+    const params = [];
+
+    if (casa_id) { query += ' AND casa_id = ?'; params.push(casa_id); }
+    if (data_inicio) { query += ' AND data >= ?'; params.push(data_inicio); }
+    if (data_fim) { query += ' AND data <= ?'; params.push(data_fim); }
+
+    query += ' GROUP BY tipo_transacao';
+
+    const [rows] = await db.query(query, params);
+    
+    const summary = {
+      credito: 0,
+      debito: 0,
+      saldo: 0
+    };
+
+    rows.forEach(row => {
+      if (row.tipo_transacao === 'CREDITO') summary.credito = row.total;
+      if (row.tipo_transacao === 'DEBITO') summary.debito = row.total;
+    });
+
+    summary.saldo = summary.credito - summary.debito;
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Documents
+app.get('/api/usuarios/:id/documentos', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_documentos WHERE usuario_id = ? ORDER BY created_at DESC', [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/documentos', authenticateToken, upload.single('arquivo'), async (req, res) => {
+  const { descricao } = req.body;
+  if (!req.file) return res.status(400).json({ message: 'Arquivo não enviado' });
+  const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+  try {
+    const filePath = `/uploads/documentos/${req.file.filename}`;
+    const [result] = await db.query(
+      'INSERT INTO tb_documentos (usuario_id, descricao, arquivo_path, arquivo_nome, tipo_arquivo) VALUES (?, ?, ?, ?, ?)',
+      [req.params.id, descricao, filePath, req.file.originalname, ext]
+    );
+    await logAction(req.user.id, 'UPLOAD_DOCUMENTO', 'tb_documentos', `Documento "${descricao}" enviado para usuario ${req.params.id}`);
+    res.json({ success: true, id: result.insertId, arquivo_path: filePath, arquivo_nome: req.file.originalname, tipo_arquivo: ext, descricao });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/usuarios/:id/documentos/:doc_id', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_documentos WHERE id = ? AND usuario_id = ?', [req.params.doc_id, req.params.id]);
+    if (rows.length > 0) {
+      const fullPath = path.join(__dirname, rows[0].arquivo_path);
+      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+    }
+    await db.query('DELETE FROM tb_documentos WHERE id = ? AND usuario_id = ?', [req.params.doc_id, req.params.id]);
+    await logAction(req.user.id, 'DELETE_DOCUMENTO', 'tb_documentos', `Documento ${req.params.doc_id} removido`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Notifications
+app.get('/api/notificacoes', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_notificacoes WHERE usuario_id = ? ORDER BY created_at DESC LIMIT 50', [req.user.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
+  try {
+    await db.query('UPDATE tb_notificacoes SET lida = TRUE WHERE id = ? AND usuario_id = ?', [req.params.id, req.user.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/notificacoes/ler-todas', authenticateToken, async (req, res) => {
+  try {
+    await db.query('UPDATE tb_notificacoes SET lida = TRUE WHERE usuario_id = ?', [req.user.id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
-export type UserRole = 'ADMIN_GERAL' | 'ADMINISTRADOR' | 'COLABORADOR' | 'INTERMITENTE';
+export type UserRole = 'ADMIN_GERAL' | 'ADMINISTRADOR' | 'COLABORADOR' | 'INTERMITENTE' | 'PADRE';
 
 interface User {
     id: number;
     nome: string;
     email: string;
     role: UserRole;
+    is_oconomo?: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,8 @@ interface AuthContextType {
     logout: () => void;
     canEdit: boolean;
     isAdminGeral: boolean;
+    isPadre: boolean;
+    isOconomo: boolean;
     isAuthenticated: boolean;
 }
 
@@ -49,6 +52,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const userRole = user?.role || null;
     const isAdminGeral = userRole === 'ADMIN_GERAL';
+    const isPadre = userRole === 'PADRE';
+    const isOconomo = isPadre && !!user?.is_oconomo;
     const canEdit = isAdminGeral || userRole === 'ADMINISTRADOR';
     const isAuthenticated = !!token;
 
@@ -60,7 +65,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             login, 
             logout, 
             canEdit, 
-            isAdminGeral, 
+            isAdminGeral,
+            isPadre,
+            isOconomo,
             isAuthenticated 
         }}>
             {children}
