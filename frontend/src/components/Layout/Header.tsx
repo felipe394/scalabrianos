@@ -21,7 +21,7 @@ const Header: React.FC = () => {
       </div>
 
       <div className="header-center">
-        <h1 className="header-title">Scalabrianos Portal</h1>
+        <h1 className="header-title">Scalabrinianos Portal</h1>
       </div>
 
       <div className="header-right">

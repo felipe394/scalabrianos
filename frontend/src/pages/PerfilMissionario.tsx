@@ -50,7 +50,7 @@ const PAISES_COMMON = [
   'Tuvalu', 'Ucrânia', 'Uganda', 'Uruguai', 'Usbequistão', 'Vanuatu', 'Vaticano', 'Venezuela', 'Vietname', 'Zâmbia', 'Zimbábue'
 ];
 interface Lancamento { id: number; descricao: string; valor: number; tipo_transacao: 'CREDITO' | 'DEBITO'; data: string; status: string; apontamento_texto?: string; registrado_por_nome: string; }
-interface Missionario { id: number; nome: string; login: string; situacao: string; is_oconomo: boolean; }
+interface Missionario { id: number; nome: string; login: string; situacao: string; is_oconomo: boolean; is_superior: boolean; }
 
 interface Documento {
   id: number;
@@ -169,10 +169,10 @@ const PerfilMissionario: React.FC = () => {
 
   const saveCivil = async () => {
     setIsSaving(true);
-    try { 
-      await api.post(`${API_URL}/usuarios/${id}/dados-civis`, civilData); 
+    try {
+      await api.post(`${API_URL}/usuarios/${id}/dados-civis`, civilData);
       await api.post(`${API_URL}/usuarios/${id}/nacionalidades`, { nacionalidades });
-      alert('Dados civis e nacionalidades salvos!'); 
+      alert('Dados civis e nacionalidades salvos!');
     }
     catch { alert('Erro ao salvar dados civis.'); }
     finally { setIsSaving(false); }
@@ -210,12 +210,7 @@ const PerfilMissionario: React.FC = () => {
     finally { setIsSaving(false); }
   };
 
-  const saveReligiosos = async () => {
-    setIsSaving(true);
-    try { await api.post(`${API_URL}/usuarios/${id}/dados-religiosos`, religiososData); alert('Dados religiosos salvos!'); }
-    catch { alert('Erro ao salvar dados religiosos.'); }
-    finally { setIsSaving(false); }
-  };
+
 
   const addCasa = async () => {
     if (!novaVinculacao.casa_id) return alert('Selecione uma casa');
@@ -240,12 +235,12 @@ const PerfilMissionario: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!pendingDocDesc.trim()) { alert('Informe a descrição do documento primeiro.'); return; }
-    
+
     setIsSaving(true);
     const fd = new FormData();
     fd.append('arquivo', file);
     fd.append('descricao', pendingDocDesc.trim());
-    
+
     try {
       await api.post(`${API_URL}/usuarios/${id}/documentos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setPendingDocDesc('');
@@ -301,7 +296,8 @@ const PerfilMissionario: React.FC = () => {
             <h2>{missionario.nome}</h2>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
               <span className={`status-badge ${missionario.situacao.toLowerCase()}`}>{missionario.situacao}</span>
-              {missionario.is_oconomo && <span className="oconomo-badge">Ocônomo</span>}
+              {missionario.is_oconomo && <span className="oconomo-badge">Ecônomo</span>}
+              {missionario.is_superior && <span className="superior-badge">Superior Local</span>}
               <span className="id-badge">ID #{missionario.id}</span>
             </div>
           </div>
@@ -328,12 +324,12 @@ const PerfilMissionario: React.FC = () => {
                 <div className="form-group"><label>Naturalidade</label><input type="text" value={civilData.naturalidade} onChange={e => setCivilData(p => ({ ...p, naturalidade: e.target.value }))} disabled={!canEdit} /></div>
                 <div className="form-group">
                   <label>País</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     list="paises-filter"
-                    value={civilData.pais} 
-                    onChange={e => setCivilData(p => ({ ...p, pais: e.target.value }))} 
-                    disabled={!canEdit} 
+                    value={civilData.pais}
+                    onChange={e => setCivilData(p => ({ ...p, pais: e.target.value }))}
+                    disabled={!canEdit}
                   />
                   <datalist id="paises-filter">
                     {PAISES_COMMON.map(p => <option key={p} value={p} />)}
@@ -346,8 +342,8 @@ const PerfilMissionario: React.FC = () => {
               <div className="wizard-divider" style={{ borderBottom: '1px solid #eef2f7', paddingBottom: '8px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary)' }}>Nacionalidades</span>
                 {canEdit && (
-                  <button 
-                    className="btn-add-doc" 
+                  <button
+                    className="btn-add-doc"
                     style={{ padding: '4px 10px', fontSize: '11px' }}
                     onClick={() => setNacionalidades([...nacionalidades, ''])}
                   >
@@ -358,20 +354,20 @@ const PerfilMissionario: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                 {nacionalidades.map((nac, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: '8px' }}>
-                    <input 
-                      type="text" 
-                      value={nac} 
+                    <input
+                      type="text"
+                      value={nac}
                       onChange={e => {
                         const newNacs = [...nacionalidades];
                         newNacs[idx] = e.target.value;
                         setNacionalidades(newNacs);
-                      }} 
+                      }}
                       placeholder="Nacionalidade..."
                       disabled={!canEdit}
                       style={{ flex: 1 }}
                     />
                     {canEdit && (
-                      <button 
+                      <button
                         onClick={() => setNacionalidades(nacionalidades.filter((_, i) => i !== idx))}
                         style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer', padding: '0 4px' }}
                       >
@@ -388,7 +384,7 @@ const PerfilMissionario: React.FC = () => {
 
             <div className="section-card">
               <h3 className="section-title"><FileText size={16} /> Documentos & Anexos</h3>
-              
+
               {canEdit && (
                 <div className="doc-add-row" style={{ marginBottom: '20px' }}>
                   <input
@@ -475,9 +471,49 @@ const PerfilMissionario: React.FC = () => {
                 <div className="form-group"><label>Data do Diaconato</label><input type="date" value={religiososData.diaconato_data} onChange={e => setReligiososData(p => ({ ...p, diaconato_data: e.target.value }))} disabled={!canEdit} /></div>
                 <div className="form-group"><label>Data do Presbiterato</label><input type="date" value={religiososData.presbiterato_data} onChange={e => setReligiososData(p => ({ ...p, presbiterato_data: e.target.value }))} disabled={!canEdit} /></div>
                 <div className="form-group"><label>Bispo Ordenante</label><input type="text" value={religiososData.bispo_ordenante} onChange={e => setReligiososData(p => ({ ...p, bispo_ordenante: e.target.value }))} disabled={!canEdit} /></div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                  <label className="checkbox-label" style={{ marginTop: '20px' }}>
+                    <input type="checkbox" checked={missionario.is_oconomo} onChange={e => setMissionario(p => p ? { ...p, is_oconomo: e.target.checked } : null)} disabled={!canEdit} />
+                    É Ecônomo
+                  </label>
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                  <label className="checkbox-label" style={{ marginTop: '20px' }}>
+                    <input type="checkbox" checked={missionario.is_superior} onChange={e => setMissionario(p => p ? { ...p, is_superior: e.target.checked } : null)} disabled={!canEdit} />
+                    Superior Local
+                  </label>
+                </div>
               </div>
             </div>
-            {canEdit && <div className="tab-save-row"><button className="btn-save-tab" onClick={saveReligiosos} disabled={isSaving}>{isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar Dados Religiosos</button></div>}
+            {canEdit && (
+              <div className="tab-save-row">
+                <button className="btn-save-tab" onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    await Promise.all([
+                      api.post(`${API_URL}/usuarios/${id}/dados-religiosos`, religiososData),
+                      api.put(`${API_URL}/usuarios/${id}`, {
+                        nome: missionario.nome,
+                        login: missionario.login,
+                        role: 'PADRE',
+                        status: 'ATIVO', // Simplified update, or fetch full record
+                        situacao: missionario.situacao,
+                        is_oconomo: missionario.is_oconomo,
+                        is_superior: missionario.is_superior
+                      })
+                    ]);
+                    alert('Dados religiosos e cargos salvos!');
+                  } catch {
+                    alert('Erro ao salvar dados religiosos.');
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} 
+                  Salvar Dados Religiosos e Cargos
+                </button>
+              </div>
+            )}
           </div>
         )}
 

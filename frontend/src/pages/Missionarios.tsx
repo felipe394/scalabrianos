@@ -20,6 +20,7 @@ interface Missionario {
   status: 'ATIVO' | 'INATIVO';
   situacao: 'ATIVO' | 'FALECIDO' | 'EGRESSO' | 'EXCLAUSTRADO';
   is_oconomo: boolean;
+  is_superior: boolean;
 }
 
 interface Casa { id: number; nome: string; }
@@ -65,6 +66,7 @@ interface WizardData {
   presbiterato_data: string;
   bispo_ordenante: string;
   is_oconomo: boolean;
+  is_superior: boolean;
   // Step 5 - Acesso
   login: string;
   password: string;
@@ -87,7 +89,8 @@ const initialWizard: WizardData = {
   logradouro: '', complemento: '', bairro: '', cep: '', endereco_cidade_estado: '',
   celular_whatsapp: '', telefone_fixo: '', email_pessoal: '',
   primeiros_votos_data: '', votos_perpetuos_data: '', lugar_profissao: '',
-  diaconato_data: '', presbiterato_data: '', bispo_ordenante: '', is_oconomo: false,
+  diaconato_data: '', presbiterato_data: '', bispo_ordenante: '', 
+  is_oconomo: false, is_superior: false,
   login: '', password: '', status: 'ATIVO',
   nacionalidades: ['Brasileira'],
 };
@@ -266,7 +269,7 @@ const Missionarios: React.FC = () => {
       const userRes = await api.post(`${API_URL}/usuarios`, {
         nome: wizardData.nome, login: wizardData.login, password: wizardData.password,
         role: 'PADRE', status: wizardData.status, situacao: wizardData.situacao,
-        is_oconomo: wizardData.is_oconomo,
+        is_oconomo: wizardData.is_oconomo, is_superior: wizardData.is_superior,
       });
       const newId = userRes.data.id;
 
@@ -379,7 +382,9 @@ const Missionarios: React.FC = () => {
             <thead>
               <tr>
                 <th>ID</th><th>Nome</th><th>Login</th>
-                <th className="center">Ocônomo</th><th className="center">Status</th>
+                <th className="center">Ecônomo</th>
+                <th className="center">Superior</th>
+                <th className="center">Status</th>
                 <th className="center">Situação</th><th>Ações</th>
               </tr>
             </thead>
@@ -390,6 +395,7 @@ const Missionarios: React.FC = () => {
                   <td className="bold">{m.nome}</td>
                   <td>{m.login}</td>
                   <td className="center"><span className={`status-tag ${m.is_oconomo ? 'ativo' : 'inativo'}`}>{m.is_oconomo ? 'Sim' : 'Não'}</span></td>
+                  <td className="center"><span className={`status-tag ${m.is_superior ? 'ativo' : 'inativo'}`}>{m.is_superior ? 'Sim' : 'Não'}</span></td>
                   <td className="center"><span className={`status-tag ${m.status.toLowerCase()}`}>{m.status}</span></td>
                   <td className="center"><span className={`situacao-tag ${m.situacao.toLowerCase()}`}>{m.situacao}</span></td>
                   <td className="center">
@@ -471,11 +477,11 @@ const Missionarios: React.FC = () => {
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>País</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         list="paises-list"
-                        value={wizardData.pais} 
-                        onChange={e => set('pais', e.target.value)} 
+                        value={wizardData.pais}
+                        onChange={e => set('pais', e.target.value)}
                         placeholder="Selecione ou digite..."
                       />
                       <datalist id="paises-list">
@@ -490,8 +496,8 @@ const Missionarios: React.FC = () => {
 
                   <div className="wizard-divider" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     Nacionalidades
-                    <button 
-                      className="btn-add-doc" 
+                    <button
+                      className="btn-add-doc"
                       style={{ padding: '2px 8px', fontSize: '10px' }}
                       onClick={() => set('nacionalidades', [...wizardData.nacionalidades, ''])}
                     >
@@ -501,19 +507,19 @@ const Missionarios: React.FC = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     {wizardData.nacionalidades.map((nac, idx) => (
                       <div key={idx} style={{ display: 'flex', gap: '5px' }}>
-                        <input 
-                          type="text" 
-                          value={nac} 
+                        <input
+                          type="text"
+                          value={nac}
                           onChange={e => {
                             const newNacs = [...wizardData.nacionalidades];
                             newNacs[idx] = e.target.value;
                             set('nacionalidades', newNacs);
-                          }} 
+                          }}
                           placeholder="Nacionalidade..."
                           style={{ flex: 1 }}
                         />
                         {idx > 0 && (
-                          <button 
+                          <button
                             onClick={() => set('nacionalidades', wizardData.nacionalidades.filter((_, i) => i !== idx))}
                             style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer' }}
                           >
@@ -587,15 +593,15 @@ const Missionarios: React.FC = () => {
               {wizardStep === 1 && (
                 <div className="wizard-step-content">
                   <div className="wizard-divider">Endereço</div>
-                  
+
                   <div className="form-row-2">
                     <div className="form-group">
                       <label>CEP {cepLoading && <Loader2 size={12} className="animate-spin" style={{ marginLeft: 4 }} />}</label>
-                      <input 
-                        type="text" 
-                        value={wizardData.cep} 
-                        onChange={e => handleCepChange(e.target.value)} 
-                        placeholder="00000-000" 
+                      <input
+                        type="text"
+                        value={wizardData.cep}
+                        onChange={e => handleCepChange(e.target.value)}
+                        placeholder="00000-000"
                       />
                     </div>
                     <div className="form-group">
@@ -641,7 +647,13 @@ const Missionarios: React.FC = () => {
                   <div className="form-group full">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={wizardData.is_oconomo} onChange={e => set('is_oconomo', e.target.checked)} />
-                      É Ocônomo — acessa relatórios financeiros e marca apontamentos
+                      É Ecônomo — acessa relatórios financeiros e marca apontamentos
+                    </label>
+                  </div>
+                  <div className="form-group full">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={wizardData.is_superior} onChange={e => set('is_superior', e.target.checked)} />
+                      É Superior Local — cargo de liderança na casa religiosa
                     </label>
                   </div>
                 </div>
@@ -748,7 +760,8 @@ const Missionarios: React.FC = () => {
                     <div className="summary-row"><span>Nome</span><strong>{wizardData.nome || '—'}</strong></div>
                     <div className="summary-row"><span>Login</span><strong>{wizardData.login || '—'}</strong></div>
                     <div className="summary-row"><span>Situação</span><strong>{wizardData.situacao}</strong></div>
-                    <div className="summary-row"><span>Ocônomo</span><strong>{wizardData.is_oconomo ? 'Sim' : 'Não'}</strong></div>
+                    <div className="summary-row"><span>Ecônomo</span><strong>{wizardData.is_oconomo ? 'Sim' : 'Não'}</strong></div>
+                    <div className="summary-row"><span>Superior Local</span><strong>{wizardData.is_superior ? 'Sim' : 'Não'}</strong></div>
                     <div className="summary-row"><span>Casas vinculadas</span><strong>{casasVinculos.length}</strong></div>
                     <div className="summary-row"><span>Documentos</span><strong>{docs.length} arquivo{docs.length !== 1 ? 's' : ''}</strong></div>
                   </div>

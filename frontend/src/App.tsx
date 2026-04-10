@@ -12,7 +12,9 @@ import Administradores from './pages/Administradores';
 import Missionarios from './pages/Missionarios';
 import PerfilMissionario from './pages/PerfilMissionario';
 import Logs from './pages/Logs';
+import LogsAcesso from './pages/LogsAcesso';
 import Relatorios from './pages/Relatorios';
+import Financeiro from './pages/Financeiro';
 import ForgotPassword from './pages/ForgotPassword';
 import MainLayout from './components/Layout/MainLayout';
 import { AuthProvider } from './context/AuthContext';
@@ -36,6 +38,7 @@ function App() {
 
           {/* System logs */}
           <Route path="/logs" element={<MainLayout><Logs /></MainLayout>} />
+          <Route path="/logs-acesso" element={<MainLayout><LogsAcesso /></MainLayout>} />
 
           {/* Itinerary subroutes */}
           <Route path="/itinerario-formativo" element={<MainLayout><ItinerarioFormativo /></MainLayout>} />
@@ -45,6 +48,7 @@ function App() {
           <Route path="/itinerario/postulado" element={<MainLayout><Postulado /></MainLayout>} />
 
           <Route path="/relatorios" element={<MainLayout><Relatorios /></MainLayout>} />
+          <Route path="/financeiro" element={<MainLayout><Financeiro /></MainLayout>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>

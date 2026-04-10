@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  Users, MapPin, BookOpen, Milestone, PieChart, FileText, GraduationCap,
-  Briefcase, School, Lock, ClipboardList
+  Users, PieChart, Lock, ClipboardList, DollarSign, ShieldCheck
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -44,9 +43,11 @@ const Sidebar: React.FC = () => {
         { icon: <Lock size={18} />, label: 'Perfis (Admins)', path: '/administradores' },
         { icon: <Users size={18} />, label: 'Cadastro de Missionário', path: '/missionarios' },
         { icon: <ClipboardList size={18} />, label: 'Logs do Sistema', path: '/logs' },
+        { icon: <ShieldCheck size={18} />, label: 'Logs de Acesso', path: '/logs-acesso' },
       ]
     },
     { icon: <HomeIcon size={20} />, label: 'Casas Religiosas', path: '/casas-religiosas' },
+    { icon: <DollarSign size={20} />, label: 'Gestão Financeira', path: '/financeiro' },
     { icon: <PieChart size={20} />, label: 'Relatórios', path: '/relatorios' },
   ];
 

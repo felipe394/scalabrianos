@@ -89,6 +89,13 @@ async function createNotification(usuarioId, mensagem, tipo = 'INFO', linkPath =
   } catch (err) { console.error('Error creating notification:', err); }
 };
 
+async function logAccess(usuarioId, tipo, req, detalhes) {
+  try {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await db.query('INSERT INTO tb_logs_acesso (usuario_id, tipo, ip_address, detalhes) VALUES (?, ?, ?, ?)', [usuarioId, tipo, ip, detalhes]);
+  } catch (err) { console.error('Error logging access:', err); }
+}
+
 // Login route
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
@@ -112,6 +119,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     if (!isMatch) {
+      await logAccess(user.id, 'FALHA', req, 'Senha incorreta');
       return res.status(401).json({ success: false, message: 'Senha incorreta' });
     }
 
@@ -120,6 +128,8 @@ app.post('/api/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
+
+    await logAccess(user.id, 'LOGIN', req, 'Autenticação bem-sucedida');
 
     res.json({
       success: true,
@@ -142,7 +152,7 @@ app.post('/api/login', async (req, res) => {
 // Users
 app.get('/api/usuarios', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo FROM tb_usuarios');
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior FROM tb_usuarios');
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -151,7 +161,7 @@ app.get('/api/usuarios', authenticateToken, async (req, res) => {
 
 app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo FROM tb_usuarios');
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior FROM tb_usuarios');
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -159,13 +169,13 @@ app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/usuarios', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao, is_oconomo } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo, is_superior } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   try {
-    console.log('Creating user:', { nome, login, role, status, situacao, is_oconomo });
+    console.log('Creating user:', { nome, login, role, status, situacao, is_oconomo, is_superior });
     const [result] = await db.query(
-      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao, is_oconomo) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nome, login, hashedPassword, role, status, situacao, is_oconomo ? 1 : 0]
+      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao, is_oconomo, is_superior) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [nome, login, hashedPassword, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0]
     );
     await logAction(req.user.id, 'CRIO_USUARIO', 'tb_usuarios', `Criou usuario ${login}`);
     res.status(201).json({ id: result.insertId, ...req.body });
@@ -176,12 +186,12 @@ app.post('/api/usuarios', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao, is_oconomo } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo, is_superior } = req.body;
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?';
-    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -212,7 +222,11 @@ app.get('/api/casas-religiosas', authenticateToken, async (req, res) => {
 
 app.post('/api/casas-religiosas/get', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM tb_casas_religiosas');
+    const [rows] = await db.query(`
+      SELECT c.*, 
+      (SELECT COUNT(*) FROM tb_missionario_casas mc WHERE mc.casa_id = c.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())) as missionarios_count
+      FROM tb_casas_religiosas c
+    `);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -595,6 +609,55 @@ app.get('/api/financas-casa/sumario', authenticateToken, async (req, res) => {
 
     summary.saldo = summary.credito - summary.debito;
     res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Analytics Dashboard Endpoint
+app.get('/api/financas-casa/estatisticas', authenticateToken, async (req, res) => {
+  try {
+    // 1. Totals by house
+    const [houseTotals] = await db.query(`
+      SELECT c.nome, SUM(f.valor) as total, f.tipo_transacao
+      FROM tb_financas_casa f
+      JOIN tb_casas_religiosas c ON f.casa_id = c.id
+      GROUP BY c.id, f.tipo_transacao
+    `);
+
+    // 2. Data by month (last 6 months)
+    const [monthlyStats] = await db.query(`
+      SELECT DATE_FORMAT(data, '%Y-%m') as mes, tipo_transacao, SUM(valor) as total
+      FROM tb_financas_casa
+      WHERE data >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+      GROUP BY mes, tipo_transacao
+      ORDER BY mes ASC
+    `);
+
+    // 3. Largest single transactions
+    const [largeTransactions] = await db.query(`
+      SELECT f.*, c.nome as casa_nome
+      FROM tb_financas_casa f
+      JOIN tb_casas_religiosas c ON f.casa_id = c.id
+      ORDER BY valor DESC LIMIT 5
+    `);
+
+    res.json({ houseTotals, monthlyStats, largeTransactions });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Access Logs Endpoint
+app.get('/api/logs-acesso', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT l.*, u.nome as usuario_nome, u.login as usuario_login
+      FROM tb_logs_acesso l
+      LEFT JOIN tb_usuarios u ON l.usuario_id = u.id
+      ORDER BY l.created_at DESC LIMIT 200
+    `);
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

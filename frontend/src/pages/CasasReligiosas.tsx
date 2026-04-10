@@ -8,6 +8,7 @@ interface ReligiousHouse {
   nome: string;
   endereco: string;
   status: 'ATIVO' | 'INATIVO';
+  missionarios_count: number;
 }
 
 const CasasReligiosas: React.FC = () => {
@@ -83,7 +84,7 @@ const CasasReligiosas: React.FC = () => {
   };
 
   const handleNewHouse = () => {
-    setEditingHouse({ id: 0, nome: '', endereco: '', status: 'ATIVO' });
+    setEditingHouse({ id: 0, nome: '', endereco: '', status: 'ATIVO', missionarios_count: 0 });
     setIsModalOpen(true);
   };
 
@@ -140,6 +141,7 @@ const CasasReligiosas: React.FC = () => {
                 <th>#</th>
                 <th>Nome</th>
                 <th>Endereço</th>
+                <th className="center">Missionários</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -154,6 +156,9 @@ const CasasReligiosas: React.FC = () => {
                   </td>
                   <td>{house.nome}</td>
                   <td>{house.endereco}</td>
+                  <td className="center">
+                    <span className="count-badge">{house.missionarios_count || 0}</span>
+                  </td>
                   <td>
                     <span className={`status-tag ${house.status.toLowerCase()}`}>
                       {house.status}
