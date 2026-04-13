@@ -148,6 +148,9 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Helper to sanitize dates (convert empty string to null)
+const sanitizeDate = (date) => (date === '' || date === undefined) ? null : date;
+
 // Generic CRUD endpoints for tables
 // Users
 app.get('/api/usuarios', authenticateToken, async (req, res) => {
@@ -270,15 +273,16 @@ app.post('/api/usuarios/:id/dados-civis', authenticateToken, async (req, res) =>
   try {
     console.log(`Updating/Inserting civil data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_civis WHERE usuario_id = ?', [req.params.id]);
+    const dNasc = sanitizeDate(data_nascimento);
     if (rows.length > 0) {
       await db.query(
         'UPDATE tb_dados_civis SET data_nascimento=?, filiacao=?, cidade_estado=?, diocese=?, pais=?, naturalidade=?, rnm=?, cpf=?, titulo_eleitor=?, cnh=?, passaporte=? WHERE usuario_id=?',
-        [data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, req.params.id]
+        [dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, req.params.id]
       );
     } else {
       await db.query(
         'INSERT INTO tb_dados_civis (usuario_id, data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [req.params.id, data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte]
+        [req.params.id, dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte]
       );
     }
     res.json({ success: true });
@@ -349,15 +353,20 @@ app.post('/api/usuarios/:id/dados-religiosos', authenticateToken, async (req, re
   try {
     console.log(`Updating/Inserting religious data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_religiosos WHERE usuario_id = ?', [req.params.id]);
+    const dPrimeiros = sanitizeDate(primeiros_votos_data);
+    const dPerpetuos = sanitizeDate(votos_perpetuos_data);
+    const dDiaconato = sanitizeDate(diaconato_data);
+    const dPresbiterato = sanitizeDate(presbiterato_data);
+    
     if (rows.length > 0) {
       await db.query(
         'UPDATE tb_dados_religiosos SET primeiros_votos_data=?, votos_perpetuos_data=?, lugar_profissao=?, diaconato_data=?, presbiterato_data=?, bispo_ordenante=? WHERE usuario_id=?',
-        [primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante, req.params.id]
+        [dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante, req.params.id]
       );
     } else {
       await db.query(
         'INSERT INTO tb_dados_religiosos (usuario_id, primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [req.params.id, primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante]
+        [req.params.id, dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante]
       );
     }
     res.json({ success: true });
@@ -476,8 +485,8 @@ app.get('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res)
 app.post('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res) => {
   const { casa_id, data_inicio, data_fim, funcao, is_superior } = req.body;
   try {
-    const dInicio = data_inicio ? data_inicio : null;
-    const dFim = data_fim ? data_fim : null;
+    const dInicio = sanitizeDate(data_inicio);
+    const dFim = sanitizeDate(data_fim);
     const superior = is_superior ? 1 : 0;
 
     const [result] = await db.query(
@@ -520,9 +529,10 @@ app.post('/api/financas-casa', authenticateToken, async (req, res) => {
   const { casa_id, descricao, valor, tipo_transacao, data, status } = req.body;
   try {
     const defaultStatus = status || 'PENDENTE';
+    const dLanc = sanitizeDate(data);
     const [result] = await db.query(
       'INSERT INTO tb_financas_casa (casa_id, registrado_por, descricao, valor, tipo_transacao, data, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [casa_id, req.user.id, descricao, valor, tipo_transacao, data, defaultStatus]
+      [casa_id, req.user.id, descricao, valor, tipo_transacao, dLanc, defaultStatus]
     );
     await logAction(req.user.id, 'LANCAMENTO_FINANCEIRO', 'tb_financas_casa', `Lançamento de ${tipo_transacao} na casa ${casa_id} - R$ ${valor}`);
     res.json({ success: true, id: result.insertId });

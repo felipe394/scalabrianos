@@ -496,7 +496,7 @@ const PerfilMissionario: React.FC = () => {
                         nome: missionario.nome,
                         login: missionario.login,
                         role: 'PADRE',
-                        status: 'ATIVO', // Simplified update, or fetch full record
+                        status: (missionario as any).status || 'ATIVO', 
                         situacao: missionario.situacao,
                         is_oconomo: missionario.is_oconomo,
                         is_superior: missionario.is_superior
