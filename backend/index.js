@@ -213,6 +213,32 @@ app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Alias for PUT to avoid 403 Forbidden issues on some servers
+app.post('/api/usuarios/:id/update', authenticateToken, async (req, res) => {
+  const { nome, login, password, role, status, situacao, is_oconomo, is_superior } = req.body;
+  const { id } = req.params;
+
+  try {
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0];
+
+    if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      params.push(hashedPassword);
+    }
+
+    query += ' WHERE id = ?';
+    params.push(id);
+
+    await db.query(query, params);
+    await logAction(req.user.id, 'EDITOU_USUARIO', 'tb_usuarios', `Editou usuario ID ${id} (via POST)`);
+    res.json({ message: 'Usuário atualizado com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Religious Houses
 app.get('/api/casas-religiosas', authenticateToken, async (req, res) => {
   try {

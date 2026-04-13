@@ -111,7 +111,6 @@ const PerfilMissionario: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
-  const BASE_URL = API_URL.replace('/api', '');
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -146,7 +145,7 @@ const PerfilMissionario: React.FC = () => {
       setDocumentos(docsRes.data);
 
       try {
-        const nacRes = await api.get(`${API_URL}/usuarios/${id}/nacionalidades`);
+        const nacRes = await api.get(`/usuarios/${id}/nacionalidades`);
         setNacionalidades(nacRes.data || []);
       } catch { setNacionalidades([]); }
     } catch (err) {
@@ -170,8 +169,8 @@ const PerfilMissionario: React.FC = () => {
   const saveCivil = async () => {
     setIsSaving(true);
     try {
-      await api.post(`${API_URL}/usuarios/${id}/dados-civis`, civilData);
-      await api.post(`${API_URL}/usuarios/${id}/nacionalidades`, { nacionalidades });
+      await api.post(`/usuarios/${id}/dados-civis`, civilData);
+      await api.post(`/usuarios/${id}/nacionalidades`, { nacionalidades });
       alert('Dados civis e nacionalidades salvos!');
     }
     catch { alert('Erro ao salvar dados civis.'); }
@@ -205,7 +204,7 @@ const PerfilMissionario: React.FC = () => {
 
   const saveEndereco = async () => {
     setIsSaving(true);
-    try { await api.post(`${API_URL}/usuarios/${id}/endereco-contato`, enderecoData); alert('Endereço e contato salvos!'); }
+    try { await api.post(`/usuarios/${id}/endereco-contato`, enderecoData); alert('Endereço e contato salvos!'); }
     catch { alert('Erro ao salvar endereço.'); }
     finally { setIsSaving(false); }
   };
@@ -215,9 +214,9 @@ const PerfilMissionario: React.FC = () => {
   const addCasa = async () => {
     if (!novaVinculacao.casa_id) return alert('Selecione uma casa');
     try {
-      await api.post(`${API_URL}/usuarios/${id}/casas-historico`, novaVinculacao);
+      await api.post(`/usuarios/${id}/casas-historico`, novaVinculacao);
       setNovaVinculacao({ casa_id: '', data_inicio: '', data_fim: '', funcao: '', is_superior: false });
-      const res = await api.get(`${API_URL}/usuarios/${id}/casas-historico`);
+      const res = await api.get(`/usuarios/${id}/casas-historico`);
       setCasasHistorico(res.data);
     } catch { alert('Erro ao vincular casa.'); }
   };
@@ -225,7 +224,7 @@ const PerfilMissionario: React.FC = () => {
   const removeCasa = async (historico_id: number) => {
     if (!confirm('Deseja remover este vínculo?')) return;
     try {
-      await api.delete(`${API_URL}/usuarios/${id}/casas-historico/${historico_id}`);
+      await api.delete(`/usuarios/${id}/casas-historico/${historico_id}`);
       setCasasHistorico(prev => prev.filter(c => c.id !== historico_id));
     } catch { alert('Erro ao remover vínculo.'); }
   };
@@ -242,9 +241,9 @@ const PerfilMissionario: React.FC = () => {
     fd.append('descricao', pendingDocDesc.trim());
 
     try {
-      await api.post(`${API_URL}/usuarios/${id}/documentos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post(`/usuarios/${id}/documentos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setPendingDocDesc('');
-      const res = await api.get(`${API_URL}/usuarios/${id}/documentos`);
+      const res = await api.get(`/usuarios/${id}/documentos`);
       setDocumentos(res.data);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch { alert('Erro ao enviar documento'); }
@@ -254,7 +253,7 @@ const PerfilMissionario: React.FC = () => {
   const removeDoc = async (docId: number) => {
     if (!confirm('Excluir este documento permanentemente?')) return;
     try {
-      await api.delete(`${API_URL}/usuarios/${id}/documentos/${docId}`);
+      await api.delete(`/usuarios/${id}/documentos/${docId}`);
       setDocumentos(prev => prev.filter(d => d.id !== docId));
     } catch { alert('Erro ao remover documento'); }
   };
@@ -406,7 +405,7 @@ const PerfilMissionario: React.FC = () => {
               ) : (
                 <div className="docs-grid">
                   {documentos.map(doc => (
-                    <div key={doc.id} className="doc-card" onClick={() => window.open(`${BASE_URL}${doc.arquivo_path}`, '_blank')}>
+                    <div key={doc.id} className="doc-card" onClick={() => window.open(`${API_URL}/documentos/${doc.id}/view`, '_blank')}>
                       {canEdit && (
                         <button className="doc-remove" onClick={(e) => { e.stopPropagation(); removeDoc(doc.id); }}>
                           <X size={12} />
@@ -414,7 +413,7 @@ const PerfilMissionario: React.FC = () => {
                       )}
                       <div className="doc-thumb">
                         {['jpg', 'jpeg', 'png'].includes(doc.tipo_arquivo.toLowerCase())
-                          ? <img src={`${BASE_URL}${doc.arquivo_path}`} alt={doc.descricao} />
+                          ? <img src={`${API_URL}/documentos/${doc.id}/view`} alt={doc.descricao} />
                           : <FileText size={32} className="doc-icon-pdf" />
                         }
                       </div>
@@ -491,8 +490,8 @@ const PerfilMissionario: React.FC = () => {
                   setIsSaving(true);
                   try {
                     await Promise.all([
-                      api.post(`${API_URL}/usuarios/${id}/dados-religiosos`, religiososData),
-                      api.put(`${API_URL}/usuarios/${id}`, {
+                      api.post(`/usuarios/${id}/dados-religiosos`, religiososData),
+                      api.post(`/usuarios/${id}/update`, {
                         nome: missionario.nome,
                         login: missionario.login,
                         role: 'PADRE',
