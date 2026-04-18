@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, Save, X, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, Edit2, X, Loader2, AlertCircle, Plus, DollarSign, Calendar, Trash2, Download, Home as HomeIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import '../styles/CasasReligiosas.css';
 
@@ -9,9 +12,14 @@ interface ReligiousHouse {
   endereco: string;
   status: 'ATIVO' | 'INATIVO';
   missionarios_count: number;
+  regional?: string;
+  data_referencia_casa?: string;
 }
 
 const CasasReligiosas: React.FC = () => {
+  const { t } = useTranslation();
+  const { canEdit } = useAuth();
+  const navigate = useNavigate();
   const [houses, setHouses] = useState<ReligiousHouse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,8 +31,6 @@ const CasasReligiosas: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
-
   useEffect(() => {
     fetchHouses();
   }, []);
@@ -32,12 +38,12 @@ const CasasReligiosas: React.FC = () => {
   const fetchHouses = async () => {
     setIsLoading(true);
     try {
-      const response = await api.post(`${API_URL}/casas-religiosas/get`);
+      const response = await api.post('/casas-religiosas/get');
       setHouses(response.data);
       setError(null);
     } catch (err: any) {
       console.error('Error fetching houses:', err);
-      setError('Erro ao carregar casas religiosas');
+      setError(t('casas.error_loading'));
     } finally {
       setIsLoading(false);
     }
@@ -68,16 +74,16 @@ const CasasReligiosas: React.FC = () => {
     setSaveLoading(true);
     try {
       if (editingHouse.id === 0) {
-        await api.post(`${API_URL}/casas-religiosas`, editingHouse);
+        await api.post('/casas-religiosas', editingHouse);
       } else {
-        await api.put(`${API_URL}/casas-religiosas/${editingHouse.id}`, editingHouse);
+        await api.put(`/casas-religiosas/${editingHouse.id}`, editingHouse);
       }
       await fetchHouses();
       setIsModalOpen(false);
       setEditingHouse(null);
     } catch (err) {
       console.error('Error saving house:', err);
-      alert('Erro ao salvar casa religiosa');
+      alert(t('common.error'));
     } finally {
       setSaveLoading(false);
     }
@@ -88,86 +94,143 @@ const CasasReligiosas: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleDeleteHouse = async (id: number) => {
+    if (!window.confirm(t('common.confirm_delete') || 'Deseja excluir?')) return;
+    try {
+      await api.delete(`/casas-religiosas/${id}`);
+      await fetchHouses();
+    } catch (err) {
+      console.error('Error deleting house:', err);
+      alert(t('common.error'));
+    }
+  };
+
   return (
-    <div className="casas-container">
+    <div className="page-container">
       <div className="page-header">
-        <h2>Casas Religiosas</h2>
+        <div className="title-with-badge">
+          <HomeIcon size={24} />
+          <h2>{t('casas.title')}</h2>
+        </div>
         <div className="header-actions">
-          <button className="btn-export">Exportar Excel</button>
-          <button className="btn-new" onClick={handleNewHouse}>+ Nova Casa</button>
+          <button className="btn-export">
+            <Download size={18} /> {t('financeiro.actions.export')}
+          </button>
+          {canEdit && (
+            <button className="btn-new" onClick={handleNewHouse}>
+              <Plus size={18} /> {t('casas.new_house')}
+            </button>
+          )}
         </div>
       </div>
 
       <div className="filters-card">
         <div className="filter-group">
-          <label>NOME DA CASA</label>
+          <label>{t('casas.name').toUpperCase()}</label>
           <input
             type="text"
-            placeholder="Filtrar por nome..."
+            placeholder={t('missionaries.search_placeholder') + "..."}
             value={filterName}
             onChange={(e) => setFilterName(e.target.value)}
           />
         </div>
         <div className="filter-group">
-          <label>STATUS</label>
+          <label>{t('casas.status').toUpperCase()}</label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
-            <option value="Todos">Todos</option>
+            <option value="Todos">{t('missionaries.filters.all')}</option>
             <option value="ATIVO">ATIVO</option>
             <option value="INATIVO">INATIVO</option>
           </select>
         </div>
-        <button className="btn-clear" onClick={handleClearFilters}>Limpar Filtros</button>
+        <div className="filter-actions">
+          <button className="btn-clear" onClick={handleClearFilters}>
+            {t('common.cancel')}
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="loading-state">
           <Loader2 className="animate-spin" size={32} />
-          <p>Carregando casas...</p>
+          <p>{t('common.loading')}</p>
         </div>
       ) : error ? (
         <div className="error-state">
           <AlertCircle size={32} />
           <p>{error}</p>
-          <button onClick={fetchHouses} className="btn-retry">Tentar novamente</button>
         </div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Nome</th>
-                <th>Endereço</th>
-                <th className="center">Missionários</th>
-                <th>Status</th>
+                <th>{t('missionaries.table.id')}</th>
+                <th>{t('casas.name')}</th>
+                <th>{t('casas.address')}</th>
+                <th>{t('casas.regional')}</th>
+                <th>{t('casas.reference_date')}</th>
+                <th className="center">{t('casas.missionaries')}</th>
+                <th className="center">{t('casas.status')}</th>
+                <th className="center">{t('missionaries.table.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {filteredHouses.map((house) => (
                 <tr key={house.id}>
-                  <td className="id-cell">
-                    {house.id}
-                    <button className="view-btn" onClick={() => handleOpenEdit(house)}>
-                      <Eye size={16} />
-                    </button>
-                  </td>
-                  <td>{house.nome}</td>
+                  <td>#{house.id}</td>
+                  <td className="bold">{house.nome}</td>
                   <td>{house.endereco}</td>
+                  <td>{house.regional}</td>
+                  <td>{house.data_referencia_casa}</td>
                   <td className="center">
-                    <span className="count-badge">{house.missionarios_count || 0}</span>
+                    <span className="count-badge">{house.missionarios_count}</span>
                   </td>
-                  <td>
+                  <td className="center">
                     <span className={`status-tag ${house.status.toLowerCase()}`}>
                       {house.status}
                     </span>
+                  </td>
+                  <td className="center">
+                    <div className="house-actions">
+                      <button 
+                        className="btn-finance-lite" 
+                        title={t('casas.cost_registration')}
+                        onClick={() => navigate('/financeiro', { state: { house_id: house.id } })}
+                      >
+                        <DollarSign size={16} />
+                      </button>
+                      {canEdit && (
+                        <>
+                          <button 
+                            className="btn-icon-edit btn-edit-lite" 
+                            title={t('common.edit')}
+                            onClick={() => handleOpenEdit(house)}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            className="btn-icon-delete btn-delete-lite" 
+                            title={t('common.delete')}
+                            onClick={() => handleDeleteHouse(house.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {filteredHouses.length === 0 && (
+            <div className="empty-state">
+              <p>{t('missionaries.empty')}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -175,14 +238,14 @@ const CasasReligiosas: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>{editingHouse.id === 0 ? 'Nova Casa Religiosa' : 'Dados da Casa'}</h3>
+              <h3>{editingHouse.id === 0 ? t('casas.new_house') : t('casas.edit_house')}</h3>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSaveHouse}>
               <div className="form-group">
-                <label>Nome da Casa</label>
+                <label>{t('casas.name')}</label>
                 <input
                   type="text"
                   value={editingHouse.nome}
@@ -191,7 +254,7 @@ const CasasReligiosas: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Endereço</label>
+                <label>{t('casas.address')}</label>
                 <input
                   type="text"
                   value={editingHouse.endereco}
@@ -199,22 +262,42 @@ const CasasReligiosas: React.FC = () => {
                   required
                 />
               </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>{t('casas.regional')}</label>
+                  <input
+                    type="text"
+                    value={editingHouse.regional || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, regional: e.target.value })}
+                    placeholder={t('casas.regional_placeholder')}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('casas.reference_date')}</label>
+                  <input
+                    type="date"
+                    value={editingHouse.data_referencia_casa || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, data_referencia_casa: e.target.value })}
+                  />
+                </div>
+              </div>
               <div className="form-group">
-                <label>Status</label>
+                <label>{t('casas.status')}</label>
                 <select
                   value={editingHouse.status}
-                  onChange={(e) => setEditingHouse({ ...editingHouse, status: e.target.value as 'ATIVO' | 'INATIVO' })}
-                  required
+                  onChange={(e) => setEditingHouse({ ...editingHouse, status: e.target.value as any })}
                 >
                   <option value="ATIVO">ATIVO</option>
                   <option value="INATIVO">INATIVO</option>
                 </select>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>
+                  {t('common.cancel')}
+                </button>
                 <button type="submit" className="btn-save" disabled={saveLoading}>
                   {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  {editingHouse.id === 0 ? 'Criar Casa' : 'Salvar Alterações'}
+                  {t('common.save')}
                 </button>
               </div>
             </form>

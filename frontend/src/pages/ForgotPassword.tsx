@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import logoVertical from '../assets/logo_vertical.png';
 import '../styles/Login.css'; // Reusing Login styles for layout
 
 const ForgotPassword: React.FC = () => {
+    const { t } = useTranslation();
     const [email, setEmail] = useState('');
     const [isSent, setIsSent] = useState(false);
     const navigate = useNavigate();
@@ -25,15 +27,15 @@ const ForgotPassword: React.FC = () => {
 
                 {!isSent ? (
                     <form className="login-form" onSubmit={handleSubmit}>
-                        <h2 style={{ color: 'var(--primary)', marginBottom: '1rem', fontWeight: 700 }}>Recuperar Senha</h2>
+                        <h2 style={{ color: 'var(--primary)', marginBottom: '1rem', fontWeight: 700 }}>{t('forgot.title')}</h2>
                         <p style={{ color: '#64748b', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                            Digite seu e-mail abaixo. Enviaremos um link para você redefinir sua senha.
+                            {t('forgot.description')}
                         </p>
 
                         <div className="input-group">
                             <input
                                 type="email"
-                                placeholder="Seu e-mail cadastrado"
+                                placeholder={t('forgot.email_placeholder')}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
@@ -41,7 +43,7 @@ const ForgotPassword: React.FC = () => {
                         </div>
 
                         <button type="submit" className="login-button">
-                            Enviar Link de Recuperação
+                            {t('forgot.submit')}
                         </button>
 
                         <div className="login-footer">
@@ -49,18 +51,18 @@ const ForgotPassword: React.FC = () => {
                                 onClick={() => navigate('/login')}
                                 style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
                             >
-                                Voltar para Login
+                                {t('forgot.back_to_login')}
                             </button>
                         </div>
                     </form>
                 ) : (
                     <div className="login-form">
-                        <h2 style={{ color: 'var(--primary)', marginBottom: '1rem', fontWeight: 700 }}>E-mail Enviado!</h2>
+                        <h2 style={{ color: 'var(--primary)', marginBottom: '1rem', fontWeight: 700 }}>{t('forgot.success_title')}</h2>
                         <p style={{ color: '#64748b', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                            Se o e-mail <strong>{email}</strong> estiver cadastrado, você receberá um link em alguns instantes.
+                            {t('forgot.success_desc')}
                         </p>
                         <button onClick={() => navigate('/login')} className="login-button">
-                            Voltar ao Login
+                            {t('forgot.back_to_login')}
                         </button>
                     </div>
                 )}

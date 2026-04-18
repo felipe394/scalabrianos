@@ -96,7 +96,7 @@ const Perfis: React.FC = () => {
   };
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
           <Lock size={24} />

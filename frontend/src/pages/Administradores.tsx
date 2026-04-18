@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Lock, Eye, EyeOff, X, Save, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth, type UserRole } from '../context/AuthContext';
 import api from '../api';
 import '../styles/Perfis.css';
@@ -17,6 +18,7 @@ interface AdminProfile {
 const ADMIN_ROLES: UserRole[] = ['ADMIN_GERAL', 'ADMINISTRADOR', 'COLABORADOR', 'INTERMITENTE'];
 
 const Administradores: React.FC = () => {
+  const { t } = useTranslation();
   const { canEdit } = useAuth();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +42,7 @@ const Administradores: React.FC = () => {
       setProfiles(adminOnly);
       setError(null);
     } catch (err: any) {
-      setError('Erro ao carregar administradores');
+      setError(t('missionaries.error_loading'));
     } finally {
       setIsLoading(false);
     }
@@ -48,10 +50,10 @@ const Administradores: React.FC = () => {
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
-      case 'ADMIN_GERAL': return 'Administrador Geral';
-      case 'ADMINISTRADOR': return 'Administrador';
-      case 'COLABORADOR': return 'Colaborador';
-      case 'INTERMITENTE': return 'Intermitente';
+      case 'ADMIN_GERAL': return t('admins.roles.admin_geral');
+      case 'ADMINISTRADOR': return t('admins.roles.admin');
+      case 'COLABORADOR': return t('admins.roles.colaborador');
+      case 'INTERMITENTE': return t('admins.roles.intermitente');
       default: return role;
     }
   };
@@ -79,7 +81,7 @@ const Administradores: React.FC = () => {
       await fetchProfiles();
       setIsModalOpen(false);
     } catch {
-      alert('Erro ao salvar perfil');
+      alert(t('common.error'));
     } finally {
       setSaveLoading(false);
     }
@@ -92,49 +94,53 @@ const Administradores: React.FC = () => {
   });
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
           <Lock size={24} />
-          <h2>Gestão de Administradores</h2>
+          <h2>{t('admins.title')}</h2>
         </div>
         {canEdit && (
-          <button className="btn-new" onClick={handleNewProfile}>+ Novo Administrador</button>
+          <button className="btn-new" onClick={handleNewProfile}>{t('admins.new_btn')}</button>
         )}
       </div>
 
       <div className="filters-card">
         <div className="filter-group">
-          <label>BUSCAR POR NOME / LOGIN</label>
+          <label>{t('admins.filters.search')}</label>
           <div className="search-input">
-            <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder={t('common.loading').replace('...', '') + "..."} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             <Search size={18} />
           </div>
         </div>
         <div className="filter-group">
-          <label>PERFIL / CARGO</label>
+          <label>{t('admins.filters.role')}</label>
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-            <option value="">Todos</option>
-            <option value="ADMIN_GERAL">Administrador Geral</option>
-            <option value="ADMINISTRADOR">Administrador</option>
-            <option value="COLABORADOR">Colaborador</option>
-            <option value="INTERMITENTE">Intermitente</option>
+            <option value="">{t('missionaries.filters.all')}</option>
+            <option value="ADMIN_GERAL">{t('admins.roles.admin_geral')}</option>
+            <option value="ADMINISTRADOR">{t('admins.roles.admin')}</option>
+            <option value="COLABORADOR">{t('admins.roles.colaborador')}</option>
+            <option value="INTERMITENTE">{t('admins.roles.intermitente')}</option>
           </select>
         </div>
-        <button className="btn-filter"><Filter size={18} /> Filtrar</button>
+        <button className="btn-filter"><Filter size={18} /> {t('missionaries.filters.filter_btn')}</button>
       </div>
 
       {isLoading ? (
-        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>Carregando...</p></div>
+        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>{t('common.loading')}</p></div>
       ) : error ? (
-        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button onClick={fetchProfiles} className="btn-retry">Tentar novamente</button></div>
+        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button onClick={fetchProfiles} className="btn-retry">{t('common.retry')}</button></div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Nome</th><th>Login (E-mail)</th>
-                <th className="center">Cargo</th><th className="center">Status</th><th>Ações</th>
+                <th>{t('missionaries.table.id')}</th>
+                <th>{t('missionaries.table.name')}</th>
+                <th>{t('missionaries.table.login')}</th>
+                <th className="center">{t('admins.filters.role')}</th>
+                <th className="center">{t('missionaries.table.status')}</th>
+                <th>{t('missionaries.table.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -157,20 +163,20 @@ const Administradores: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>{editingProfile.id === 0 ? 'Novo Administrador' : 'Editar Administrador'}</h3>
+              <h3>{editingProfile.id === 0 ? t('admins.modal_new') : t('admins.modal_edit')}</h3>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleSaveProfile}>
               <div className="form-group">
-                <label>Nome Completo</label>
+                <label>{t('missionaries.wizard.civil.full_name')}</label>
                 <input type="text" value={editingProfile.nome} onChange={e => setEditingProfile({ ...editingProfile, nome: e.target.value })} required />
               </div>
               <div className="form-group">
-                <label>Login (E-mail)</label>
+                <label>{t('missionaries.wizard.access.email')}</label>
                 <input type="email" value={editingProfile.login} onChange={e => setEditingProfile({ ...editingProfile, login: e.target.value })} required />
               </div>
               <div className="form-group">
-                <label>{editingProfile.id === 0 ? 'Senha' : 'Nova Senha (deixe em branco para manter)'}</label>
+                <label>{editingProfile.id === 0 ? t('missionaries.wizard.access.password') : 'Nova Senha (deixe em branco para manter)'}</label>
                 <div className="password-group">
                   <input type={showPassword ? 'text' : 'password'} value={editingProfile.password || ''} onChange={e => setEditingProfile({ ...editingProfile, password: e.target.value })} required={editingProfile.id === 0} />
                   <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>
@@ -179,26 +185,26 @@ const Administradores: React.FC = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Cargo</label>
+                <label>{t('admins.filters.role')}</label>
                 <select value={editingProfile.role} onChange={e => setEditingProfile({ ...editingProfile, role: e.target.value as UserRole })}>
-                  <option value="ADMIN_GERAL">Administrador Geral</option>
-                  <option value="ADMINISTRADOR">Administrador</option>
-                  <option value="COLABORADOR">Colaborador</option>
-                  <option value="INTERMITENTE">Intermitente</option>
+                  <option value="ADMIN_GERAL">{t('admins.roles.admin_geral')}</option>
+                  <option value="ADMINISTRADOR">{t('admins.roles.admin')}</option>
+                  <option value="COLABORADOR">{t('admins.roles.colaborador')}</option>
+                  <option value="INTERMITENTE">{t('admins.roles.intermitente')}</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Status</label>
+                <label>{t('missionaries.table.status')}</label>
                 <select value={editingProfile.status} onChange={e => setEditingProfile({ ...editingProfile, status: e.target.value as 'ATIVO' | 'INATIVO' })}>
                   <option value="ATIVO">ATIVO</option>
                   <option value="INATIVO">INATIVO</option>
                 </select>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</button>
                 <button type="submit" className="btn-save" disabled={saveLoading}>
                   {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  {editingProfile.id === 0 ? 'Criar' : 'Salvar'}
+                  {editingProfile.id === 0 ? t('missionaries.wizard.civil.add_btn') : t('common.save')}
                 </button>
               </div>
             </form>

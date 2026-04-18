@@ -1,8 +1,5 @@
-.module-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
+/* Cleaned up redundant container */
+
 
 .page-header {
     display: flex;

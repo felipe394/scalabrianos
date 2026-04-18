@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, Home as HouseIcon, FileText, Activity,
-  UserCheck, UserMinus, ShieldCheck, Loader2
+  UserCheck, UserMinus, Loader2
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import '../styles/Home.css';
 
@@ -15,11 +15,9 @@ interface DashboardStats {
 }
 
 const Home: React.FC = () => {
-  const { userRole } = useAuth();
+  const { t } = useTranslation();
   const [statsData, setStatsData] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
 
   useEffect(() => {
     fetchStats();
@@ -27,7 +25,7 @@ const Home: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.post(`${API_URL}/stats`);
+      const response = await api.post('/stats');
       setStatsData(response.data);
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
@@ -37,29 +35,26 @@ const Home: React.FC = () => {
   };
 
   const stats = [
-    { label: 'Total de Membros', value: statsData?.totalUsers.toString() || '0', icon: <Users size={24} />, color: '#013375' },
-    { label: 'Casas Religiosas', value: statsData?.totalHouses.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
-    { label: 'Documentos Anexados', value: '458', icon: <FileText size={24} />, color: '#013375' },
-    { label: 'Etapas de Formação', value: statsData?.totalItineraries.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.total_members'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.houses'), value: statsData?.totalHouses?.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.docs'), value: '458', icon: <FileText size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.stages'), value: statsData?.totalItineraries?.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
   ];
 
   if (isLoading) {
     return (
       <div className="loading-container">
         <Loader2 className="animate-spin" size={48} />
-        <p>Carregando dashboard...</p>
+        <p>{t('dashboard.loading')}</p>
       </div>
     );
   }
 
   return (
-    <div className="home-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
-          <h2>Dashboard Overview</h2>
-          <span className={`role-badge ${(userRole || '').toLowerCase()}`}>
-            <ShieldCheck size={14} /> {(userRole || '').replace('_', ' ')}
-          </span>
+          <h2>{t('dashboard.overview')}</h2>
         </div>
       </div>
 
@@ -80,7 +75,7 @@ const Home: React.FC = () => {
       <div className="dashboard-content">
         <div className="activity-section">
           <div className="section-header">
-            <h3>Atividades Recentes</h3>
+            <h3>{t('dashboard.recent_activity')}</h3>
           </div>
           <div className="activity-list">
             {(statsData?.recentActivities || []).map((act) => (
@@ -99,20 +94,20 @@ const Home: React.FC = () => {
 
         <div className="quick-access">
           <div className="section-header">
-            <h3>Acesso Rápido</h3>
+            <h3>{t('dashboard.quick_access.title')}</h3>
           </div>
           <div className="quick-grid">
             <button className="quick-btn">
               <UserCheck size={20} />
-              <span>Validar Perfis</span>
+              <span>{t('dashboard.quick_access.validate_profiles')}</span>
             </button>
             <button className="quick-btn">
               <FileText size={20} />
-              <span>Novos Relatórios</span>
+              <span>{t('dashboard.quick_access.new_reports')}</span>
             </button>
             <button className="quick-btn warning">
               <UserMinus size={20} />
-              <span>Pendências</span>
+              <span>{t('dashboard.quick_access.pendencies')}</span>
             </button>
           </div>
         </div>

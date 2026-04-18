@@ -18,6 +18,17 @@
 .page-header h2 {
     font-weight: 700;
     color: var(--primary);
+    margin: 0;
+}
+
+.title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.title-with-badge svg {
+    color: var(--primary);
 }
 
 .header-actions {
@@ -26,29 +37,41 @@
 }
 
 .btn-export {
-    padding: 0.6rem 1.2rem;
-    border: 1px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 1.25rem;
+    border: 1px solid var(--border-color);
     background: white;
-    color: var(--primary);
-    border-radius: 6px;
+    color: #64748b;
+    border-radius: 10px;
     font-weight: 600;
+    font-size: 0.875rem;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-export:hover {
-    background-color: var(--primary-light);
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+    color: var(--primary);
 }
 
 .btn-new {
-    padding: 0.6rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 1.25rem;
     background-color: var(--primary);
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     font-weight: 600;
+    font-size: 0.875rem;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease-in-out;
 }
 
 .btn-new:hover {
@@ -59,12 +82,12 @@
 .filters-card {
     background: white;
     padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     display: flex;
     gap: 1.5rem;
     align-items: flex-end;
-    border: 1px solid var(--primary-light);
+    border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .filter-group {
@@ -88,12 +111,15 @@
     border-radius: 8px;
     background-color: #f8fafc;
     outline: none;
-    transition: border-color 0.2s;
+    transition: all 0.2s ease-in-out;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
 }
 
 .filter-group input:focus,
 .filter-group select:focus {
     border-color: var(--primary);
+    background-color: white;
+    box-shadow: 0 0 0 3px rgba(1, 51, 117, 0.1);
 }
 
 .btn-clear {
@@ -108,10 +134,10 @@
 
 .data-table {
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     overflow: hidden;
-    border: 1px solid var(--primary-light);
+    border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 table {
@@ -122,17 +148,24 @@ table {
 th {
     text-align: left;
     padding: 1.25rem 1rem;
-    background-color: var(--primary-light);
-    font-size: 0.85rem;
+    background-color: #f8fafc;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: var(--primary);
-    border-bottom: 1px solid #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
 }
 
 td {
     padding: 1rem;
     border-bottom: 1px solid #f1f5f9;
     font-size: 0.95rem;
+    transition: background-color 0.2s;
+}
+
+tr:hover td {
+    background-color: #f8fafc;
 }
 
 .id-cell {
@@ -169,12 +202,43 @@ td {
     color: #166534;
 }
 
-.status-tag.inativo {
-    background-color: #fee2e2;
-    color: #991b1b;
+/* Unified Lite Action Buttons */
+.btn-finance-lite,
+.btn-edit-lite,
+.btn-delete-lite {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    color: #6c757d;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-/* Modal Styles */
+.btn-finance-lite:hover {
+    background: #eff6ff;
+    color: #3b82f6;
+    border-color: #bfdbfe;
+    transform: translateY(-2px);
+}
+
+.btn-edit-lite:hover {
+    background: #ecfdf5;
+    color: #10b981;
+    border-color: #a7f3d0;
+    transform: translateY(-2px);
+}
+
+.btn-delete-lite:hover {
+    background: #fef2f2;
+    color: #ef4444;
+    border-color: #fecaca;
+    transform: translateY(-2px);
+}
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -282,3 +346,42 @@ td {
     background-color: var(--primary-hover);
     transform: translateY(-1px);
 }
+.house-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.cost-btn {
+    background-color: #e3f2fd;
+    border: 1px solid #bbdefb;
+    color: #1976d2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.cost-btn:hover {
+    background-color: #1976d2;
+    color: white;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.delete-btn:hover {
+    background-color: #fef2f2;
+}
+
+/* New Action Buttons */
+/* Modal Styles */

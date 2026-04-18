@@ -36,7 +36,11 @@ const PORT = process.env.PORT || 5001;
 app.use(cors({
   origin: [
     'http://localhost:5173', 
+    'http://localhost:5174',
+    'http://localhost:5175',
     'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:5175',
     'https://scalabrinianos.dev.connectortech.com.br'
   ],
   credentials: true
@@ -99,24 +103,27 @@ async function logAccess(usuarioId, tipo, req, detalhes) {
 // Login route
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log(`[LOGIN] ${new Date().toISOString()} - Attempt for: ${email}`);
 
   try {
     const [rows] = await db.query('SELECT * FROM tb_usuarios WHERE login = ? AND status = ?', [email, 'ATIVO']);
     
     if (rows.length === 0) {
+      console.log(`[LOGIN] User not found or inactive: ${email}`);
       return res.status(401).json({ success: false, message: 'Usuário não encontrado ou inativo' });
     }
 
     const user = rows[0];
     
     // For now, accept both hashed and plain text for the provided admin password
-    // In a real app, always use bcrypt
     let isMatch = false;
     if (user.password_hash.startsWith('$2')) {
       isMatch = await bcrypt.compare(password, user.password_hash);
     } else {
       isMatch = (password === user.password_hash);
     }
+
+    console.log(`[LOGIN] User ID: ${user.id}, Password match: ${isMatch}`);
 
     if (!isMatch) {
       await logAccess(user.id, 'FALHA', req, 'Senha incorreta');
@@ -137,19 +144,25 @@ app.post('/api/login', async (req, res) => {
         id: user.id,
         nome: user.nome,
         email: user.login,
-        role: user.role
+        role: user.role,
+        is_superior: !!user.is_superior,
+        is_oconomo: !!user.is_oconomo
       },
       token
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[LOGIN ERROR]', error);
     fs.appendFileSync('debug.log', `${new Date().toISOString()} - Login Error: ${error.stack}\n`);
-    res.status(500).json({ success: false, message: 'Erro no servidor: ' + error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erro no servidor durante o login. Por favor, tente novamente mais tarde.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
 // Helper to sanitize dates (convert empty string to null)
-const sanitizeDate = (date) => (date === '' || date === undefined) ? null : date;
+const sanitizeDate = (date) => (date === '' || date === undefined || date === null) ? null : (typeof date === 'string' ? date.split('T')[0] : date);
 
 // Generic CRUD endpoints for tables
 // Users
@@ -157,6 +170,16 @@ app.get('/api/usuarios', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior FROM tb_usuarios');
     res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/usuarios/:id', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior, proximos_passos FROM tb_usuarios WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ message: 'Usuário não encontrado' });
+    res.json(rows[0]);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -189,12 +212,12 @@ app.post('/api/usuarios', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao, is_oconomo, is_superior } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo, is_superior, proximos_passos } = req.body;
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?';
-    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -215,12 +238,12 @@ app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
 
 // Alias for PUT to avoid 403 Forbidden issues on some servers
 app.post('/api/usuarios/:id/update', authenticateToken, async (req, res) => {
-  const { nome, login, password, role, status, situacao, is_oconomo, is_superior } = req.body;
+  const { nome, login, password, role, status, situacao, is_oconomo, is_superior, proximos_passos } = req.body;
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?';
-    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -263,13 +286,56 @@ app.post('/api/casas-religiosas/get', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/casas-religiosas', authenticateToken, async (req, res) => {
-  const { nome, endereco, status } = req.body;
+  const { nome, endereco, status, regional, data_referencia_casa } = req.body;
   try {
+    const dRef = sanitizeDate(data_referencia_casa);
     const [result] = await db.query(
-      'INSERT INTO tb_casas_religiosas (nome, endereco, status) VALUES (?, ?, ?)',
-      [nome, endereco, status]
+      'INSERT INTO tb_casas_religiosas (nome, endereco, status, regional, data_referencia_casa) VALUES (?, ?, ?, ?, ?)',
+      [nome, endereco, status, regional, dRef]
     );
+    await logAction(req.user.id, 'CRIAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa "${nome}" criada em ${regional || 'N/A'}`);
     res.status(201).json({ id: result.insertId, ...req.body });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
+  const { nome, endereco, status, regional, data_referencia_casa } = req.body;
+  const { id } = req.params;
+  try {
+    const dRef = sanitizeDate(data_referencia_casa);
+    await db.query(
+      'UPDATE tb_casas_religiosas SET nome = ?, endereco = ?, status = ?, regional = ?, data_referencia_casa = ? WHERE id = ?',
+      [nome, endereco, status, regional, dRef, id]
+    );
+    await logAction(req.user.id, 'ATUALIZAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa ID ${id} ("${nome}") atualizada`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Get info for logging
+    const [rows] = await db.query('SELECT nome FROM tb_casas_religiosas WHERE id = ?', [id]);
+    const nome = rows.length > 0 ? rows[0].nome : `ID ${id}`;
+
+    await db.query('DELETE FROM tb_casas_religiosas WHERE id = ?', [id]);
+    await logAction(req.user.id, 'DELETAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa "${nome}" excluída`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Categories
+app.get('/api/categorias-financas', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_categorias_financas ORDER BY categoria_pai, nome');
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -295,20 +361,20 @@ app.post('/api/usuarios/:id/dados-civis/get', authenticateToken, async (req, res
 });
 
 app.post('/api/usuarios/:id/dados-civis', authenticateToken, async (req, res) => {
-  const { data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte } = req.body;
+  const { data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, nit } = req.body;
   try {
     console.log(`Updating/Inserting civil data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_civis WHERE usuario_id = ?', [req.params.id]);
     const dNasc = sanitizeDate(data_nascimento);
     if (rows.length > 0) {
       await db.query(
-        'UPDATE tb_dados_civis SET data_nascimento=?, filiacao=?, cidade_estado=?, diocese=?, pais=?, naturalidade=?, rnm=?, cpf=?, titulo_eleitor=?, cnh=?, passaporte=? WHERE usuario_id=?',
-        [dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, req.params.id]
+        'UPDATE tb_dados_civis SET data_nascimento=?, filiacao=?, cidade_estado=?, diocese=?, pais=?, naturalidade=?, rnm=?, cpf=?, titulo_eleitor=?, cnh=?, passaporte=?, nit=? WHERE usuario_id=?',
+        [dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, nit || null, req.params.id]
       );
     } else {
       await db.query(
-        'INSERT INTO tb_dados_civis (usuario_id, data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [req.params.id, dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte]
+        'INSERT INTO tb_dados_civis (usuario_id, data_nascimento, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, nit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [req.params.id, dNasc, filiacao, cidade_estado, diocese, pais, naturalidade, rnm, cpf, titulo_eleitor, cnh, passaporte, nit || null]
       );
     }
     res.json({ success: true });
@@ -468,8 +534,8 @@ app.post('/api/usuarios/:id/itinerario', authenticateToken, async (req, res) => 
     await db.query('DELETE FROM tb_itinerario_formativo WHERE usuario_id = ?', [req.params.id]);
     for (const stage of stages) {
       await db.query(
-        'INSERT INTO tb_itinerario_formativo (usuario_id, etapa, local, periodo) VALUES (?, ?, ?, ?)',
-        [req.params.id, stage.etapa, stage.local, stage.periodo]
+        'INSERT INTO tb_itinerario_formativo (usuario_id, etapa, local, periodo, is_sub_etapa, doc_path) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.params.id, stage.etapa, stage.local, stage.periodo, stage.is_sub_etapa || 0, stage.doc_path || null]
       );
     }
     res.json({ success: true });
@@ -526,14 +592,144 @@ app.post('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res
   }
 });
 
-app.delete('/api/usuarios/:id/casas-historico/:historico_id', authenticateToken, async (req, res) => {
+// --- Specialized Profile Sections ---
+
+// 1. Formação Acadêmica
+app.get('/api/usuarios/:id/formacao-academica', authenticateToken, async (req, res) => {
   try {
-    await db.query('DELETE FROM tb_missionario_casas WHERE id = ? AND usuario_id = ?', [req.params.historico_id, req.params.id]);
-    await logAction(req.user.id, 'REMOVER_CASA', 'tb_missionario_casas', `Removido vínculo de casa ${req.params.historico_id} do usuario ${req.params.id}`);
+    const [rows] = await db.query('SELECT * FROM tb_formacao_academica WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/formacao-academica', authenticateToken, async (req, res) => {
+  const { curso, faculdade, periodo, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_formacao_academica (usuario_id, curso, faculdade, periodo, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, curso, faculdade, periodo, doc_path]);
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/formacao-academica/:fid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_formacao_academica WHERE id = ? AND usuario_id = ?', [req.params.fid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 2. Atividade Missionária
+app.get('/api/usuarios/:id/atividade-missionaria', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_atividade_missionaria WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/atividade-missionaria', authenticateToken, async (req, res) => {
+  const { periodo, lugar, missao, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_atividade_missionaria (usuario_id, periodo, lugar, missao, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, periodo, lugar, missao, doc_path]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/atividade-missionaria/:aid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_atividade_missionaria WHERE id = ? AND usuario_id = ?', [req.params.aid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 3. Saúde
+app.get('/api/usuarios/:id/saude', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_saude WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/saude', authenticateToken, async (req, res) => {
+  const { sus_card, seguradora, numero_carteira, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_saude (usuario_id, sus_card, seguradora, numero_carteira, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, sus_card, seguradora, numero_carteira, doc_path]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/saude/:sid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_saude WHERE id = ? AND usuario_id = ?', [req.params.sid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 4. Contas Bancárias
+app.get('/api/usuarios/:id/contas-bancarias', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_contas_bancarias WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/contas-bancarias', authenticateToken, async (req, res) => {
+  const { tipo_conta, titularidade, agencia, numero, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_contas_bancarias (usuario_id, tipo_conta, titularidade, agencia, numero, doc_path) VALUES (?, ?, ?, ?, ?, ?)', [req.params.id, tipo_conta, titularidade, agencia, numero, doc_path]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/contas-bancarias/:bid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_contas_bancarias WHERE id = ? AND usuario_id = ?', [req.params.bid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 5. Obras Realizadas
+app.get('/api/usuarios/:id/obras-realizadas', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_obras_realizadas WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/obras-realizadas', authenticateToken, async (req, res) => {
+  const { periodo, lugar, obra, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_obras_realizadas (usuario_id, periodo, lugar, obra, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, periodo, lugar, obra, doc_path]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/obras-realizadas/:oid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_obras_realizadas WHERE id = ? AND usuario_id = ?', [req.params.oid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 6. Observações Gerais
+app.get('/api/usuarios/:id/observacoes-gerais', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_observacoes_gerais WHERE usuario_id = ? ORDER BY created_at DESC', [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/usuarios/:id/observacoes-gerais', authenticateToken, async (req, res) => {
+  const { texto, doc_path } = req.body;
+  try {
+    await db.query('INSERT INTO tb_observacoes_gerais (usuario_id, texto, doc_path) VALUES (?, ?, ?)', [req.params.id, texto, doc_path]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/usuarios/:id/observacoes-gerais/:oid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_observacoes_gerais WHERE id = ? AND usuario_id = ?', [req.params.oid, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 app.get('/api/financas-casa/casa/:casa_id', authenticateToken, async (req, res) => {
@@ -551,14 +747,108 @@ app.get('/api/financas-casa/casa/:casa_id', authenticateToken, async (req, res) 
   }
 });
 
+// --- Monthly Financial Spreadsheets (Planilhas Mensais) ---
+
+app.get('/api/financas-mensais/usuario/:usuario_id/mes/:mes', authenticateToken, async (req, res) => {
+  const { usuario_id, mes } = req.params;
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_financas_mensais WHERE usuario_id = ? AND mes_referencia = ?', [usuario_id, mes]);
+    if (rows.length === 0) return res.json(null);
+    
+    const [itens] = await db.query('SELECT * FROM tb_financas_mensais_itens WHERE planilha_id = ?', [rows[0].id]);
+    res.json({ ...rows[0], itens });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
+  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito } = req.body;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Check if exists
+    const [existing] = await connection.query('SELECT id, status FROM tb_financas_mensais WHERE usuario_id = ? AND mes_referencia = ?', [usuario_id, mes_referencia]);
+    
+    let planilhaId;
+    if (existing.length > 0) {
+      if (existing[0].status === 'VALIDADO' && req.user.role !== 'ADMIN_GERAL') {
+         throw new Error('Esta planilha já foi validada e não pode ser editada.');
+      }
+      planilhaId = existing[0].id;
+      await connection.query(
+        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [total_credito, total_debito, planilhaId]
+      );
+      // Clean old items
+      await connection.query('DELETE FROM tb_financas_mensais_itens WHERE planilha_id = ?', [planilhaId]);
+    } else {
+      const [result] = await connection.query(
+        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito) VALUES (?, ?, ?, ?, ?)',
+        [usuario_id, casa_id, mes_referencia, total_credito, total_debito]
+      );
+      planilhaId = result.insertId;
+    }
+
+    // Insert items
+    for (const item of itens) {
+      if (item.valor > 0) {
+        await connection.query(
+          'INSERT INTO tb_financas_mensais_itens (planilha_id, categoria_id, valor) VALUES (?, ?, ?)',
+          [planilhaId, item.categoria_id, item.valor]
+        );
+      }
+    }
+
+    await connection.commit();
+    res.json({ success: true, id: planilhaId });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ message: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+app.get('/api/financas-mensais/consolidado/casa/:casa_id/mes/:mes', authenticateToken, async (req, res) => {
+  const { casa_id, mes } = req.params;
+  try {
+    const [rows] = await db.query(`
+      SELECT p.*, u.nome as usuario_nome 
+      FROM tb_financas_mensais p
+      JOIN tb_usuarios u ON p.usuario_id = u.id
+      WHERE p.casa_id = ? AND p.mes_referencia = ?
+    `, [casa_id, mes]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/financas-mensais/:id/validar', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { status, apontamentos } = req.body;
+  try {
+    await db.query(
+      'UPDATE tb_financas_mensais SET status = ?, apontamentos = ? WHERE id = ?',
+      [status, apontamentos, id]
+    );
+    await logAction(req.user.id, 'VALIDAR_PLANILHA_MENSAL', 'tb_financas_mensais', `Planilha ${id} validada como ${status}`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 app.post('/api/financas-casa', authenticateToken, async (req, res) => {
-  const { casa_id, descricao, valor, tipo_transacao, data, status } = req.body;
+  const { casa_id, descricao, valor, tipo_transacao, data, status, categoria_id, tipo_despesa } = req.body;
   try {
     const defaultStatus = status || 'PENDENTE';
     const dLanc = sanitizeDate(data);
     const [result] = await db.query(
-      'INSERT INTO tb_financas_casa (casa_id, registrado_por, descricao, valor, tipo_transacao, data, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [casa_id, req.user.id, descricao, valor, tipo_transacao, dLanc, defaultStatus]
+      'INSERT INTO tb_financas_casa (casa_id, registrado_por, descricao, valor, tipo_transacao, data, status, categoria_id, tipo_despesa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [casa_id, req.user.id, descricao, valor, tipo_transacao, dLanc, defaultStatus, categoria_id || null, tipo_despesa || 'CASA']
     );
     await logAction(req.user.id, 'LANCAMENTO_FINANCEIRO', 'tb_financas_casa', `Lançamento de ${tipo_transacao} na casa ${casa_id} - R$ ${valor}`);
     res.json({ success: true, id: result.insertId });
@@ -568,16 +858,33 @@ app.post('/api/financas-casa', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/financas-casa/:id', authenticateToken, async (req, res) => {
-  const { status, apontamento_texto } = req.body;
   try {
+    const { casa_id, descricao, valor, tipo_transacao, data, status, categoria_id, tipo_despesa, apontamento_texto } = req.body;
+    
     // Get existing data to know who to notify
     const [existing] = await db.query('SELECT registrado_por, descricao, casa_id FROM tb_financas_casa WHERE id = ?', [req.params.id]);
     
-    await db.query(
-      'UPDATE tb_financas_casa SET status = ?, apontamento_texto = ? WHERE id = ?',
-      [status, apontamento_texto, req.params.id]
-    );
-    await logAction(req.user.id, 'ATUALIZAR_FINANCAS', 'tb_financas_casa', `Status atualizado para ${status} no lancamento ${req.params.id}`);
+    const dLanc = data ? sanitizeDate(data) : undefined;
+    
+    let updateQuery = 'UPDATE tb_financas_casa SET id = id'; // dummy start
+    const params = [];
+
+    if (casa_id) { updateQuery += ', casa_id = ?'; params.push(casa_id); }
+    if (descricao) { updateQuery += ', descricao = ?'; params.push(descricao); }
+    if (valor !== undefined) { updateQuery += ', valor = ?'; params.push(valor); }
+    if (tipo_transacao) { updateQuery += ', tipo_transacao = ?'; params.push(tipo_transacao); }
+    if (dLanc !== undefined) { updateQuery += ', data = ?'; params.push(dLanc); }
+    if (status) { updateQuery += ', status = ?'; params.push(status); }
+    if (categoria_id !== undefined) { updateQuery += ', categoria_id = ?'; params.push(categoria_id); }
+    if (tipo_despesa) { updateQuery += ', tipo_despesa = ?'; params.push(tipo_despesa); }
+    if (apontamento_texto !== undefined) { updateQuery += ', apontamento_texto = ?'; params.push(apontamento_texto); }
+
+    updateQuery += ' WHERE id = ?';
+    params.push(req.params.id);
+
+    await db.query(updateQuery, params);
+    
+    await logAction(req.user.id, 'ATUALIZAR_FINANCAS', 'tb_financas_casa', `Lançamento ID ${req.params.id} ("${descricao || 'sem desc'}") atualizado - Status: ${status}`);
     
     // Notify user if it's an "Apontamento"
     if (status === 'APONTAMENTO' && existing.length > 0) {
@@ -591,15 +898,29 @@ app.put('/api/financas-casa/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/financas-casa/:id', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT descricao, valor FROM tb_financas_casa WHERE id = ?', [req.params.id]);
+    const info = rows.length > 0 ? `"${rows[0].descricao}" (R$ ${rows[0].valor})` : `ID ${req.params.id}`;
+
+    await db.query('DELETE FROM tb_financas_casa WHERE id = ?', [req.params.id]);
+    await logAction(req.user.id, 'DELETAR_FINANCAS', 'tb_financas_casa', `Lançamento ${info} excluído`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Consolidated Financial Report
 app.get('/api/financas-casa/relatorio', authenticateToken, async (req, res) => {
-  const { casa_id, status, data_inicio, data_fim } = req.query;
+  const { casa_id, status, data_inicio, data_fim, tipo_despesa } = req.query;
   try {
     let query = `
-      SELECT f.*, u.nome as registrado_por_nome, c.nome as casa_nome 
+      SELECT f.*, u.nome as registrado_por_nome, c.nome as casa_nome, cat.nome as categoria_nome 
       FROM tb_financas_casa f 
       LEFT JOIN tb_usuarios u ON f.registrado_por = u.id 
       LEFT JOIN tb_casas_religiosas c ON f.casa_id = c.id 
+      LEFT JOIN tb_categorias_financas cat ON f.categoria_id = cat.id
       WHERE 1=1
     `;
     const params = [];
@@ -608,6 +929,7 @@ app.get('/api/financas-casa/relatorio', authenticateToken, async (req, res) => {
     if (status) { query += ' AND f.status = ?'; params.push(status); }
     if (data_inicio) { query += ' AND f.data >= ?'; params.push(data_inicio); }
     if (data_fim) { query += ' AND f.data <= ?'; params.push(data_fim); }
+    if (tipo_despesa) { query += ' AND f.tipo_despesa = ?'; params.push(tipo_despesa); }
 
     query += ' ORDER BY f.data DESC, f.id DESC';
 
@@ -619,7 +941,7 @@ app.get('/api/financas-casa/relatorio', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/financas-casa/sumario', authenticateToken, async (req, res) => {
-  const { casa_id, data_inicio, data_fim } = req.query;
+  const { casa_id, data_inicio, data_fim, tipo_despesa } = req.query;
   try {
     let query = 'SELECT tipo_transacao, SUM(valor) as total FROM tb_financas_casa WHERE 1=1';
     const params = [];
@@ -627,6 +949,7 @@ app.get('/api/financas-casa/sumario', authenticateToken, async (req, res) => {
     if (casa_id) { query += ' AND casa_id = ?'; params.push(casa_id); }
     if (data_inicio) { query += ' AND data >= ?'; params.push(data_inicio); }
     if (data_fim) { query += ' AND data <= ?'; params.push(data_fim); }
+    if (tipo_despesa) { query += ' AND tipo_despesa = ?'; params.push(tipo_despesa); }
 
     query += ' GROUP BY tipo_transacao';
 

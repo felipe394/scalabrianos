@@ -1,6 +1,8 @@
-import { Menu, LogOut } from 'lucide-react';
+import React from 'react';
+import { Menu, LogOut, Languages } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import logo from '../../assets/logo_vertical.png';
 import NotificationBell from './NotificationBell';
 import '../../styles/Header.css';
@@ -8,6 +10,11 @@ import '../../styles/Header.css';
 const Header: React.FC = () => {
   const { toggleSidebar } = useLayout();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+  };
 
   return (
     <header className="header">
@@ -21,14 +28,32 @@ const Header: React.FC = () => {
       </div>
 
       <div className="header-center">
-        <h1 className="header-title">Scalabrinianos Portal</h1>
+        <h1 className="header-title">{t('header.title')}</h1>
       </div>
 
       <div className="header-right">
         <NotificationBell />
+        
+        <div className="language-selector">
+          <button 
+            className={`lang-btn ${i18n.language.startsWith('pt') ? 'active' : ''}`} 
+            onClick={() => handleLanguageChange('pt')}
+            title="Português"
+          >
+            PT
+          </button>
+          <button 
+            className={`lang-btn ${i18n.language.startsWith('es') ? 'active' : ''}`} 
+            onClick={() => handleLanguageChange('es')}
+            title="Español"
+          >
+            ES
+          </button>
+        </div>
+
         <div className="user-info" onClick={() => navigate('/login')}>
           <span>Admin</span>
-          <LogOut size={20} className="logout-icon" />
+          <LogOut size={20} className="logout-icon" title={t('header.logout')} />
         </div>
       </div>
 

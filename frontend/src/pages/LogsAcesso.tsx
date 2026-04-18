@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Loader2, AlertCircle, User, Activity, Clock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import '../styles/Perfis.css';
 
@@ -14,6 +15,7 @@ interface AccessLogEntry {
 }
 
 const LogsAcesso: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ const LogsAcesso: React.FC = () => {
       setLogs(res.data);
       setError(null);
     } catch {
-      setError('Erro ao carregar logs de acesso');
+      setError(t('missionaries.error_loading'));
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +39,7 @@ const LogsAcesso: React.FC = () => {
 
   const formatDate = (dt: string) => {
     const d = new Date(dt);
-    return d.toLocaleString('pt-BR');
+    return d.toLocaleString(i18n.language === 'es' ? 'es-ES' : 'pt-BR');
   };
 
   const getTipoClass = (tipo: string) => {
@@ -51,54 +53,54 @@ const LogsAcesso: React.FC = () => {
   };
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
           <ShieldCheck size={24} color="#10b981" />
-          <h2>Logs de Acesso</h2>
+          <h2>{t('logs.title')}</h2>
         </div>
-        <button className="btn-filter" onClick={fetchLogs}>Atualizar</button>
+        <button className="btn-filter" onClick={fetchLogs}>{t('financeiro.actions.refresh')}</button>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: '24px', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div className="stat-card blue">
           <div className="stat-icon"><Activity size={20} /></div>
           <div className="stat-info">
-            <span className="stat-label">Total de Eventos</span>
+            <span className="stat-label">{t('logs.stats.total')}</span>
             <h3 className="stat-value">{logs.length}</h3>
           </div>
         </div>
         <div className="stat-card green">
           <div className="stat-icon"><User size={20} /></div>
           <div className="stat-info">
-            <span className="stat-label">Logins (Sucesso)</span>
+            <span className="stat-label">{t('logs.stats.success')}</span>
             <h3 className="stat-value">{logs.filter(l => l.tipo === 'LOGIN').length}</h3>
           </div>
         </div>
         <div className="stat-card red">
           <div className="stat-icon"><AlertCircle size={20} /></div>
           <div className="stat-info">
-            <span className="stat-label">Falhas de Acesso</span>
+            <span className="stat-label">{t('logs.stats.failure')}</span>
             <h3 className="stat-value">{logs.filter(l => l.tipo === 'FALHA').length}</h3>
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>Carregando registros...</p></div>
+        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>{t('common.loading')}</p></div>
       ) : error ? (
-        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button className="btn-retry" onClick={fetchLogs}>Tentar novamente</button></div>
+        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button className="btn-retry" onClick={fetchLogs}>{t('common.retry')}</button></div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th>Data/Hora</th>
-                <th>Usuário</th>
-                <th>Tipo</th>
-                <th>IP</th>
-                <th>Detalhes</th>
+                <th>{t('logs.table.datetime')}</th>
+                <th>{t('logs.table.user')}</th>
+                <th>{t('logs.table.type')}</th>
+                <th>{t('logs.table.ip')}</th>
+                <th>{t('logs.table.details')}</th>
               </tr>
             </thead>
             <tbody>
@@ -121,7 +123,7 @@ const LogsAcesso: React.FC = () => {
                 </tr>
               ))}
               {logs.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>Nenhum log de acesso registrado ainda.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>{t('logs.empty')}</td></tr>
               )}
             </tbody>
           </table>

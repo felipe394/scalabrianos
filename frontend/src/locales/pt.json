@@ -1,0 +1,313 @@
+{
+  "translation": {
+    "header": {
+      "title": "Portal Scalabrinianos",
+      "logout": "Sair"
+    },
+    "notifications": {
+      "title": "Notificações",
+      "mark_all": "Marcar todas como lidas",
+      "empty": "Nenhuma notificação por enquanto."
+    },
+    "menu": {
+      "home": "Home",
+      "admin": "Administração",
+      "profiles": "Perfis (Admins)",
+      "missionaries": "Cadastro de Missionário",
+      "system_logs": "Logs do Sistema",
+      "access_logs": "Logs de Acesso",
+      "houses": "Casas Religiosas",
+      "finance": "Gestão Financeira",
+      "reports": "Relatórios",
+      "logout": "Sair"
+    },
+    "dashboard": {
+      "overview": "Visão Geral",
+      "loading": "Carregando dashboard...",
+      "stats": {
+        "total_members": "Total de Membros",
+        "houses": "Casas Religiosas",
+        "docs": "Documentos Anexados",
+        "stages": "Etapas de Formação"
+      },
+      "recent_activity": "Atividades Recentes",
+      "quick_access": {
+        "title": "Acesso Rápido",
+        "validate_profiles": "Validar Perfis",
+        "new_reports": "Novos Relatórios",
+        "pendencies": "Pendências"
+      }
+    },
+    "missionaries": {
+      "title": "Cadastro de Missionários",
+      "new_btn": "+ Novo Missionário",
+      "loading": "Carregando missionários...",
+      "error_loading": "Erro ao carregar missionários",
+      "empty": "Nenhum missionário encontrado",
+      "search_placeholder": "Pesquisar por nome...",
+      "filters": {
+        "name": "BUSCAR POR NOME",
+        "situation": "SITUAÇÃO",
+        "all": "Todos",
+        "filter_btn": "Filtrar"
+      },
+      "table": {
+        "id": "ID",
+        "name": "Nome",
+        "login": "Login",
+        "oconomo": "Ecônomo",
+        "superior": "Superior",
+        "status": "Status",
+        "situation": "Situação",
+        "actions": "Ações",
+        "view_details": "Ver Detalhes"
+      },
+      "wizard": {
+        "title": "Novo Missionário",
+        "steps": {
+          "civil": "Dados Civis",
+          "address": "Endereço",
+          "religious": "Dados Religiosos",
+          "houses": "Casas",
+          "access": "Acesso Login"
+        },
+        "civil": {
+          "full_name": "Nome Completo *",
+          "birth_date": "Data de Nascimento",
+          "situation": "Situação",
+          "parents": "Filiação (Pais)",
+          "birth_place_natural": "Naturalidade",
+          "birth_place_city": "Cidade / Estado (Nasc.)",
+          "country": "País",
+          "diocese": "Diocese",
+          "nationalities": "Nacionalidades",
+          "add_btn": "Adicionar"
+        },
+        "docs": {
+          "title": "Documentos",
+          "hint": "Escreva o nome do documento (ex: RG, CPF, Passaporte) e clique em Adicionar Arquivo.",
+          "placeholder": "Descrição do documento...",
+          "add_btn": "Adicionar Arquivo",
+          "remove": "Remover"
+        },
+        "address": {
+          "title": "Endereço",
+          "cep": "CEP",
+          "neighborhood": "Bairro",
+          "street": "Logradouro",
+          "complement": "Complemento",
+          "city_state": "Cidade / Estado",
+          "contact": "Contato",
+          "cellphone": "Celular / WhatsApp",
+          "phone": "Telefone Fixo",
+          "personal_email": "E-mail Pessoal"
+        },
+        "religious": {
+          "vows_title": "Consagração e Votos",
+          "first_vows": "Data Primeiros Votos",
+          "perpetual_vows": "Data Votos Perpétuos",
+          "profession_place": "Lugar de Profissão",
+          "ordination_title": "Ordenação",
+          "diaconate": "Data do Diaconato",
+          "presbyterate": "Data do Presbiterato",
+          "ordaining_bishop": "Bispo Ordenante",
+          "is_oconomo": "É Ecônomo — acessa relatórios financeiros e marca apontamentos",
+          "is_superior": "É Superior Local — cargo de liderança na casa religiosa"
+        },
+        "houses": {
+          "hint": "Vincule o missionário às casas religiosas em que vai atuar. O tempo de permanência máximo por casa é 5 anos.",
+          "select_house": "Casa Religiosa",
+          "start_date": "Data de Início",
+          "is_superior": "Superior Local",
+          "bind_btn": "Vincular Casa",
+          "empty": "Nenhuma casa vinculada ainda.",
+          "since": "desde",
+          "max_perm_hint": "O tempo de permanência máximo numa casa é de 5 anos."
+        },
+        "access": {
+          "title": "Credenciais de Acesso",
+          "hint": "O missionário terá acesso limitado ao sistema. Defina o e-mail e a senha iniciais.",
+          "email": "E-mail de Login *",
+          "password": "Senha *",
+          "pass_hint": "Mínimo 6 caracteres...",
+          "account_status": "Status da Conta",
+          "summary": "Resumo do cadastro",
+          "active_desc": "Ativo — pode acessar o sistema",
+          "inactive_desc": "Inativo — acesso bloqueado",
+          "btn_finish": "Cadastrar Missionário"
+        },
+        "common": {
+          "next": "Próximo",
+          "back": "Voltar",
+          "cancel": "Cancelar"
+        }
+      }
+    },
+    "profile": {
+      "loading": "Carregando perfil...",
+      "not_found": "Missionário não encontrado",
+      "back_btn": "Voltar",
+      "oconomo_badge": "Ecônomo",
+      "superior_badge": "Superior Local",
+      "tabs": {
+        "personal": "Dados Pessoais",
+        "contact": "Contato & Endereço",
+        "religious": "Dados Religiosos",
+        "houses": "Casas"
+      },
+      "sections": {
+        "civil": "Dados Civis",
+        "docs": "Documentos & Anexos",
+        "address": "Endereço",
+        "contact": "Contato",
+        "religious": "Dados Religiosos",
+        "bind_house": "Vincular a uma Casa",
+        "history_house": "Histórico de Casas"
+      },
+      "actions": {
+        "save_civil": "Salvar Dados Civis e Nacionalidades",
+        "save_address": "Salvar Endereço e Contato",
+        "save_religious": "Salvar Dados Religiosos e Cargos",
+        "upload_btn": "Enviar Arquivo",
+        "bind_btn": "Vincular Casa"
+      }
+    },
+    "financeiro": {
+      "title": "Gestão Financeira Geral",
+      "summary": {
+        "balance": "Saldo Consolidado",
+        "incomes": "Total Entradas (Crédito)",
+        "expenses": "Total Saídas (Débito)",
+        "credit": "Total Entradas",
+        "debit": "Total Saídas"
+      },
+      "filters": {
+        "search": "BUSCAR",
+        "house": "CASA RELIGIOSA",
+        "status": "STATUS",
+        "expense_type": "TIPO DE DESPESA",
+        "start_date": "DATA INÍCIO",
+        "end_date": "DATA FIM",
+        "registered_by": "REGISTRADO POR",
+        "region_country": "REGIÃO / PAÍS",
+        "credit": "Entradas",
+        "debit": "Saídas",
+        "balance": "Saldo"
+      },
+      "table": {
+        "description": "Descrição",
+        "value": "Valor",
+        "transaction_type": "Tipo Transação",
+        "expense_type": "Tipo Despesa",
+        "category": "Categoria",
+        "date": "Data",
+        "registered_by": "Registrado Por"
+      },
+      "actions": {
+        "refresh": "Atualizar",
+        "export": "Exportar Excel",
+        "new_entry": "Novo Lançamento"
+      }
+    },
+    "casas": {
+      "title": "Casas Religiosas",
+      "error_loading": "Erro ao carregar casas religiosas",
+      "regional": "Regional",
+      "reference_date": "Data Referência",
+      "new_house": "Nova Casa",
+      "edit_house": "Dados da Casa",
+      "name": "Nome da Casa",
+      "address": "Endereço",
+      "status": "Status",
+      "missionaries": "Missionários",
+      "cost_registration": "Cadastro de Custos",
+      "regional_placeholder": "Ex: Sudeste"
+    },
+    "reports": {
+      "title": "Dashboard Analítico Financeiro",
+      "summary": {
+        "cash_balance": "Saldo em caixa (Total)",
+        "total_credit": "Total Entradas",
+        "total_debit": "Total Saídas"
+      },
+      "sections": {
+        "top_expenses": "Maiores Gastos por Casa (Top 5)",
+        "large_entries": "Lançamentos de Maior Valor",
+        "monthly_trend": "Tendência Mensal (Últimos 6 Meses)"
+      }
+    },
+    "itinerary": {
+      "title": "Itinerário Formativo",
+      "sections": {
+        "stages": "Etapas de Formação",
+        "academic": "Formação Acadêmica Adicional"
+      },
+      "fields": {
+        "period": "Ano/Período",
+        "location": "Local/Instituição",
+        "others": "Outras Especializações / Mestrados"
+      }
+    },
+    "admins": {
+      "title": "Gestão de Administradores",
+      "new_btn": "+ Novo Administrador",
+      "modal_new": "Novo Administrador",
+      "modal_edit": "Editar Administrador",
+      "filters": {
+        "search": "BUSCAR POR NOME / LOGIN",
+        "role": "PERFIL / CARGO"
+      },
+      "roles": {
+        "admin_geral": "Administrador Geral",
+        "admin": "Administrador",
+        "colaborador": "Colaborador",
+        "intermitente": "Intermitente"
+      }
+    },
+    "logs": {
+      "title": "Logs de Acesso",
+      "stats": {
+        "total": "Total de Eventos",
+        "success": "Logins (Sucesso)",
+        "failure": "Falhas de Acesso"
+      },
+      "table": {
+        "user": "Usuário",
+        "action": "Ação",
+        "date": "Data",
+        "datetime": "Data/Hora",
+        "type": "Tipo",
+        "details": "Detalhes",
+        "ip": "IP"
+      },
+      "empty": "Nenhum log de acesso registrado ainda."
+    },
+    "login": {
+      "email_placeholder": "Digite seu e-mail",
+      "password_placeholder": "Digite sua senha",
+      "remember_me": "Lembrar minha senha",
+      "submit": "Acessar",
+      "loading": "Acessando...",
+      "forgot_password": "Esqueci minha senha"
+    },
+    "forgot": {
+      "title": "Recuperar Senha",
+      "description": "Digite seu e-mail abaixo. Enviaremos um link para você redefinir sua senha.",
+      "email_placeholder": "Seu e-mail cadastrado",
+      "submit": "Enviar Link de Recuperação",
+      "back_to_login": "Voltar para Login",
+      "success_title": "E-mail Enviado!",
+      "success_desc": "Se o e-mail estiver cadastrado, você receberá um link em alguns instantes."
+    },
+    "common": {
+      "loading": "Carregando...",
+      "error": "Ocorreu um erro",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "back": "Voltar",
+      "yes": "Sim",
+      "no": "Não",
+      "retry": "Tentar novamente"
+    }
+  }
+}

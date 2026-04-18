@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Search, Filter, Users, Eye, X, Save, Loader2, AlertCircle, EyeOff,
   ChevronRight, ChevronLeft, User, MapPin, BookOpen, Lock, CheckCircle,
-  Home as HomeIcon, Plus, Trash2, FileText, Image as ImageIcon, Star
+  Home as HomeIcon, Plus, Trash2, FileText, Image as ImageIcon, Star,
+  Activity, Users, Search, Filter, Eye, X, Loader2, AlertCircle,
+  GraduationCap, DollarSign, Save, ShieldCheck, EyeOff
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import '../styles/Perfis.css';
@@ -73,15 +75,29 @@ interface WizardData {
   status: 'ATIVO' | 'INATIVO';
   // Additional Step 1
   nacionalidades: string[];
+  itinerario: ItineraryStage[];
+  // Training
+  formacao_curso: string;
+  formacao_instituicao: string;
+  formacao_periodo: string;
+  // Health
+  saude_sus: string;
+  saude_seguradora: string;
+  saude_carteira: string;
+  // Finance
+  nit: string;
+  banco_tipo: string;
+  banco_titular: string;
+  banco_agencia: string;
+  banco_numero: string;
 }
 
-const STEPS = [
-  { label: 'Dados Civis', icon: <User size={15} /> },
-  { label: 'Endereço', icon: <MapPin size={15} /> },
-  { label: 'Dados Religiosos', icon: <BookOpen size={15} /> },
-  { label: 'Casas', icon: <HomeIcon size={15} /> },
-  { label: 'Acesso Login', icon: <Lock size={15} /> },
-];
+interface ItineraryStage {
+  etapa: string;
+  is_sub_etapa: boolean;
+  local: string;
+  periodo: string;
+}
 
 const initialWizard: WizardData = {
   nome: '', data_nascimento: '', filiacao: '', naturalidade: '', pais: 'Brasil',
@@ -93,6 +109,16 @@ const initialWizard: WizardData = {
   is_oconomo: false, is_superior: false,
   login: '', password: '', status: 'ATIVO',
   nacionalidades: ['Brasileira'],
+  itinerario: [
+    { etapa: 'SEMINARIO', is_sub_etapa: false, local: '', periodo: '' },
+    { etapa: 'SEMINARIO', is_sub_etapa: true, local: '', periodo: '' },
+    { etapa: 'PROPEDEUTICO', is_sub_etapa: true, local: '', periodo: '' },
+    { etapa: 'FILOSOFIA', is_sub_etapa: true, local: '', periodo: '' },
+    { etapa: 'POSTULADO', is_sub_etapa: true, local: '', periodo: '' },
+  ],
+  formacao_curso: '', formacao_instituicao: '', formacao_periodo: '',
+  saude_sus: '', saude_seguradora: '', saude_carteira: '',
+  nit: '', banco_tipo: '', banco_titular: '', banco_agencia: '', banco_numero: ''
 };
 
 const PAISES_COMMON = [
@@ -130,6 +156,7 @@ function calcDuracao(dataInicio: string): string {
 
 const Missionarios: React.FC = () => {
   const { canEdit } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [missionarios, setMissionarios] = useState<Missionario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -141,6 +168,18 @@ const Missionarios: React.FC = () => {
   const [wizardData, setWizardData] = useState<WizardData>(initialWizard);
   const [saveLoading, setSaveLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Steps definition updated with translation
+  const STEPS = [
+    { label: t('missionaries.wizard.steps.civil'), icon: <User size={15} /> },
+    { label: t('missionaries.wizard.steps.address'), icon: <MapPin size={15} /> },
+    { label: t('missionaries.wizard.steps.religious'), icon: <BookOpen size={15} /> },
+    { label: 'Itinerário', icon: <Activity size={15} /> },
+    { label: 'Formação & Missão', icon: <GraduationCap size={15} /> },
+    { label: 'Saúde & Financeiro', icon: <ShieldCheck size={15} /> },
+    { label: t('missionaries.wizard.steps.houses'), icon: <HomeIcon size={15} /> },
+    { label: t('missionaries.wizard.steps.access'), icon: <Lock size={15} /> },
+  ];
 
   // Step 1 — dynamic docs (local, uploaded after user created)
   const [docs, setDocs] = useState<DocEntry[]>([]);
@@ -171,7 +210,7 @@ const Missionarios: React.FC = () => {
       setMissionarios(mRes.data.filter((u: any) => u.role === 'PADRE'));
       setCasasDisponiveis(cRes.data);
       setError(null);
-    } catch { setError('Erro ao carregar missionários'); }
+    } catch { setError(t('missionaries.error_loading')); }
     finally { setIsLoading(false); }
   };
 
@@ -220,7 +259,7 @@ const Missionarios: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!pendingDocDescricao.trim()) {
-      alert('Escreva a descrição do documento antes de selecionar o arquivo.');
+      alert(t('missionaries.wizard.docs.hint'));
       e.target.value = '';
       return;
     }
@@ -279,6 +318,7 @@ const Missionarios: React.FC = () => {
         cidade_estado: wizardData.cidade_estado, diocese: wizardData.diocese,
         pais: wizardData.pais, naturalidade: wizardData.naturalidade,
         rnm: '', cpf: '', titulo_eleitor: '', cnh: '', passaporte: '',
+        nit: wizardData.nit
       });
 
       // 3 — Address
@@ -314,6 +354,47 @@ const Missionarios: React.FC = () => {
         nacionalidades: wizardData.nacionalidades
       });
 
+      // 6.5 — Itinerário
+      await api.post(`${API_URL}/usuarios/${newId}/itinerario`, {
+        stages: wizardData.itinerario
+      });
+
+      // 6.6 — Formação Acadêmica (if provided)
+      if (wizardData.formacao_curso) {
+        await api.post(`${API_URL}/usuarios/${newId}/formacao-academica`, {
+          curso: wizardData.formacao_curso,
+          faculdade: wizardData.formacao_instituicao,
+          periodo: wizardData.formacao_periodo
+        });
+      }
+
+      // 6.7 — Saúde (if provided)
+      if (wizardData.saude_sus || wizardData.saude_seguradora) {
+        await api.post(`${API_URL}/usuarios/${newId}/saude`, {
+          sus_card: wizardData.saude_sus,
+          seguradora: wizardData.saude_seguradora,
+          numero_carteira: wizardData.saude_carteira
+        });
+      }
+
+      // 6.8 — Contas Bancárias (if provided)
+      if (wizardData.banco_numero) {
+        await api.post(`${API_URL}/usuarios/${newId}/contas-bancarias`, {
+          tipo_confirmacao: wizardData.banco_tipo,
+          tipo_conta: wizardData.banco_tipo,
+          titularidade: wizardData.banco_titular,
+          agencia: wizardData.banco_agencia,
+          numero: wizardData.banco_numero
+        });
+      }
+
+      // 6.9 — NIT (already handled in step 2 technically, but let's be sure if we added a specific field)
+      if (wizardData.nit) {
+        // NIT is usually in dados-civis, we already sent it above? 
+        // Let's check step 2. Wait, I should add NIT to the dados-civis update.
+        // I'll update the dados-civis call above.
+      }
+
       // 7 — Documentos (uploaded after user creation)
       for (const doc of docs) {
         if (!doc.file) continue;
@@ -327,9 +408,9 @@ const Missionarios: React.FC = () => {
 
       await fetchMissionarios();
       setIsWizardOpen(false);
-      alert(`Missionário ${wizardData.nome} cadastrado com sucesso!`);
+      alert(`${wizardData.nome} cadastrado com sucesso!`);
     } catch (err: any) {
-      alert('Erro ao cadastrar missionário: ' + (err?.response?.data?.message || err.message));
+      alert('Erro: ' + (err?.response?.data?.message || err.message));
     } finally {
       setSaveLoading(false);
     }
@@ -345,47 +426,47 @@ const Missionarios: React.FC = () => {
   const casaNome = (id: string) => casasDisponiveis.find(c => String(c.id) === id)?.nome || id;
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
-        <div className="title-with-badge"><Users size={24} /><h2>Cadastro de Missionários</h2></div>
-        {canEdit && <button className="btn-new" onClick={openWizard}>+ Novo Missionário</button>}
+        <div className="title-with-badge"><Users size={24} /><h2>{t('missionaries.title')}</h2></div>
+        {canEdit && <button className="btn-new" onClick={openWizard}>{t('missionaries.new_btn')}</button>}
       </div>
 
       <div className="filters-card">
         <div className="filter-group">
-          <label>BUSCAR POR NOME</label>
+          <label>{t('missionaries.filters.name')}</label>
           <div className="search-input">
-            <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder={t('missionaries.search_placeholder')} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             <Search size={18} />
           </div>
         </div>
         <div className="filter-group">
-          <label>SITUAÇÃO</label>
+          <label>{t('missionaries.filters.situation')}</label>
           <select value={situacaoFilter} onChange={e => setSituacaoFilter(e.target.value)}>
-            <option value="">Todos</option>
+            <option value="">{t('missionaries.filters.all')}</option>
             <option value="ATIVO">Ativo</option>
             <option value="FALECIDO">Falecido</option>
             <option value="EGRESSO">Egresso</option>
             <option value="EXCLAUSTRADO">Exclaustrado</option>
           </select>
         </div>
-        <button className="btn-filter"><Filter size={18} /> Filtrar</button>
+        <button className="btn-filter"><Filter size={18} /> {t('missionaries.filters.filter_btn')}</button>
       </div>
 
       {isLoading ? (
-        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>Carregando missionários...</p></div>
+        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>{t('missionaries.loading')}</p></div>
       ) : error ? (
-        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button onClick={fetchMissionarios} className="btn-retry">Tentar novamente</button></div>
+        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button onClick={fetchMissionarios} className="btn-retry">{t('common.retry')}</button></div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Nome</th><th>Login</th>
-                <th className="center">Ecônomo</th>
-                <th className="center">Superior</th>
-                <th className="center">Status</th>
-                <th className="center">Situação</th><th>Ações</th>
+                <th>{t('missionaries.table.id')}</th><th>{t('missionaries.table.name')}</th><th>{t('missionaries.table.login')}</th>
+                <th className="center">{t('missionaries.table.oconomo')}</th>
+                <th className="center">{t('missionaries.table.superior')}</th>
+                <th className="center">{t('missionaries.table.status')}</th>
+                <th className="center">{t('missionaries.table.situation')}</th><th>{t('missionaries.table.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -394,19 +475,19 @@ const Missionarios: React.FC = () => {
                   <td>#{m.id}</td>
                   <td className="bold">{m.nome}</td>
                   <td>{m.login}</td>
-                  <td className="center"><span className={`status-tag ${m.is_oconomo ? 'ativo' : 'inativo'}`}>{m.is_oconomo ? 'Sim' : 'Não'}</span></td>
-                  <td className="center"><span className={`status-tag ${m.is_superior ? 'ativo' : 'inativo'}`}>{m.is_superior ? 'Sim' : 'Não'}</span></td>
+                  <td className="center"><span className={`status-tag ${m.is_oconomo ? 'ativo' : 'inativo'}`}>{m.is_oconomo ? t('common.yes') : t('common.no')}</span></td>
+                  <td className="center"><span className={`status-tag ${m.is_superior ? 'ativo' : 'inativo'}`}>{m.is_superior ? t('common.yes') : t('common.no')}</span></td>
                   <td className="center"><span className={`status-tag ${m.status.toLowerCase()}`}>{m.status}</span></td>
                   <td className="center"><span className={`situacao-tag ${m.situacao.toLowerCase()}`}>{m.situacao}</span></td>
                   <td className="center">
-                    <button className="btn-icon-view" title="Ver Detalhes" onClick={() => navigate(`/missionarios/${m.id}`)}>
-                      <Eye size={20} />
+                    <button className="btn-action-lite" title={t('missionaries.table.view_details')} onClick={() => navigate(`/missionarios/${m.id}`)}>
+                      <Eye size={18} />
                     </button>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>Nenhum missionário encontrado</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>{t('missionaries.empty')}</td></tr>
               )}
             </tbody>
           </table>
@@ -418,7 +499,7 @@ const Missionarios: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content wizard-modal">
             <div className="modal-header">
-              <h3>Novo Missionário</h3>
+              <h3>{t('missionaries.wizard.title')}</h3>
               <button className="close-btn" onClick={() => setIsWizardOpen(false)}><X size={20} /></button>
             </div>
 
@@ -442,16 +523,16 @@ const Missionarios: React.FC = () => {
               {wizardStep === 0 && (
                 <div className="wizard-step-content">
                   <div className="form-group full">
-                    <label>Nome Completo *</label>
+                    <label>{t('missionaries.wizard.civil.full_name')}</label>
                     <input type="text" value={wizardData.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome completo..." />
                   </div>
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>Data de Nascimento</label>
+                      <label>{t('missionaries.wizard.civil.birth_date')}</label>
                       <input type="date" value={wizardData.data_nascimento} onChange={e => set('data_nascimento', e.target.value)} />
                     </div>
                     <div className="form-group">
-                      <label>Situação</label>
+                      <label>{t('missionaries.wizard.civil.situation')}</label>
                       <select value={wizardData.situacao} onChange={e => set('situacao', e.target.value)}>
                         <option value="ATIVO">Ativo</option>
                         <option value="FALECIDO">Falecido</option>
@@ -462,21 +543,21 @@ const Missionarios: React.FC = () => {
                   </div>
                   <div className="form-row-3">
                     <div className="form-group">
-                      <label>Filiação (Pais)</label>
+                      <label>{t('missionaries.wizard.civil.parents')}</label>
                       <input type="text" value={wizardData.filiacao} onChange={e => set('filiacao', e.target.value)} placeholder="Nome dos pais..." />
                     </div>
                     <div className="form-group">
-                      <label>Naturalidade</label>
+                      <label>{t('missionaries.wizard.civil.birth_place_natural')}</label>
                       <input type="text" value={wizardData.naturalidade} onChange={e => set('naturalidade', e.target.value)} placeholder="Naturalidade..." />
                     </div>
                     <div className="form-group">
-                      <label>Cidade / Estado (Nasc.)</label>
+                      <label>{t('missionaries.wizard.civil.birth_place_city')}</label>
                       <input type="text" value={wizardData.cidade_estado} onChange={e => set('cidade_estado', e.target.value)} placeholder="Cidade - UF" />
                     </div>
                   </div>
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>País</label>
+                      <label>{t('missionaries.wizard.civil.country')}</label>
                       <input
                         type="text"
                         list="paises-list"
@@ -489,19 +570,19 @@ const Missionarios: React.FC = () => {
                       </datalist>
                     </div>
                     <div className="form-group">
-                      <label>Diocese</label>
+                      <label>{t('missionaries.wizard.civil.diocese')}</label>
                       <input type="text" value={wizardData.diocese} onChange={e => set('diocese', e.target.value)} />
                     </div>
                   </div>
 
                   <div className="wizard-divider" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    Nacionalidades
+                    {t('missionaries.wizard.civil.nationalities')}
                     <button
                       className="btn-add-doc"
                       style={{ padding: '2px 8px', fontSize: '10px' }}
                       onClick={() => set('nacionalidades', [...wizardData.nacionalidades, ''])}
                     >
-                      <Plus size={12} /> Adicionar
+                      <Plus size={12} /> {t('missionaries.wizard.civil.add_btn')}
                     </button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -531,16 +612,16 @@ const Missionarios: React.FC = () => {
                   </div>
 
                   {/* ── Dynamic Document Upload ── */}
-                  <div className="wizard-divider">Documentos</div>
+                  <div className="wizard-divider">{t('missionaries.wizard.docs.title')}</div>
                   <p className="wizard-hint" style={{ marginBottom: 0 }}>
-                    Escreva o nome do documento (ex: RG, CPF, Passaporte) e clique em <strong>Adicionar Arquivo</strong>.
+                    {t('missionaries.wizard.docs.hint')}
                   </p>
 
                   <div className="doc-add-row">
                     <input
                       type="text"
                       className="doc-desc-input"
-                      placeholder="Descrição do documento (ex: RG, CNH, Passaporte)..."
+                      placeholder={t('missionaries.wizard.docs.placeholder')}
                       value={pendingDocDescricao}
                       onChange={e => setPendingDocDescricao(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') fileInputRef.current?.click(); }}
@@ -550,7 +631,7 @@ const Missionarios: React.FC = () => {
                       onClick={() => fileInputRef.current?.click()}
                       title="Selecionar arquivo (PDF, JPG, PNG)"
                     >
-                      <Plus size={16} /> Adicionar Arquivo
+                      <Plus size={16} /> {t('missionaries.wizard.docs.add_btn')}
                     </button>
                     <input
                       ref={fileInputRef}
@@ -592,11 +673,11 @@ const Missionarios: React.FC = () => {
               {/* ══ STEP 2 — Endereço ══ */}
               {wizardStep === 1 && (
                 <div className="wizard-step-content">
-                  <div className="wizard-divider">Endereço</div>
+                  <div className="wizard-divider">{t('missionaries.wizard.address.title')}</div>
 
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>CEP {cepLoading && <Loader2 size={12} className="animate-spin" style={{ marginLeft: 4 }} />}</label>
+                      <label>{t('missionaries.wizard.address.cep')} {cepLoading && <Loader2 size={12} className="animate-spin" style={{ marginLeft: 4 }} />}</label>
                       <input
                         type="text"
                         value={wizardData.cep}
@@ -605,26 +686,26 @@ const Missionarios: React.FC = () => {
                       />
                     </div>
                     <div className="form-group">
-                      <label>Bairro</label>
+                      <label>{t('missionaries.wizard.address.neighborhood')}</label>
                       <input type="text" value={wizardData.bairro} onChange={e => set('bairro', e.target.value)} placeholder="Bairro..." />
                     </div>
                   </div>
 
                   <div className="form-group full">
-                    <label>Logradouro</label>
+                    <label>{t('missionaries.wizard.address.street')}</label>
                     <input type="text" value={wizardData.logradouro} onChange={e => set('logradouro', e.target.value)} placeholder="Rua, Av., número..." />
                   </div>
 
                   <div className="form-row-2">
-                    <div className="form-group"><label>Complemento</label><input type="text" value={wizardData.complemento} onChange={e => set('complemento', e.target.value)} /></div>
-                    <div className="form-group"><label>Cidade / Estado</label><input type="text" value={wizardData.endereco_cidade_estado} onChange={e => set('endereco_cidade_estado', e.target.value)} placeholder="Cidade - UF" /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.address.complement')}</label><input type="text" value={wizardData.complemento} onChange={e => set('complemento', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.address.city_state')}</label><input type="text" value={wizardData.endereco_cidade_estado} onChange={e => set('endereco_cidade_estado', e.target.value)} placeholder="Cidade - UF" /></div>
                   </div>
 
-                  <div className="wizard-divider">Contato</div>
+                  <div className="wizard-divider">{t('missionaries.wizard.address.contact')}</div>
                   <div className="form-row-3">
-                    <div className="form-group"><label>Celular / WhatsApp</label><input type="text" value={wizardData.celular_whatsapp} onChange={e => set('celular_whatsapp', e.target.value)} placeholder="(00) 90000-0000" /></div>
-                    <div className="form-group"><label>Telefone Fixo</label><input type="text" value={wizardData.telefone_fixo} onChange={e => set('telefone_fixo', e.target.value)} /></div>
-                    <div className="form-group"><label>E-mail Pessoal</label><input type="email" value={wizardData.email_pessoal} onChange={e => set('email_pessoal', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.address.cellphone')}</label><input type="text" value={wizardData.celular_whatsapp} onChange={e => set('celular_whatsapp', e.target.value)} placeholder="(00) 90000-0000" /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.address.phone')}</label><input type="text" value={wizardData.telefone_fixo} onChange={e => set('telefone_fixo', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.address.personal_email')}</label><input type="email" value={wizardData.email_pessoal} onChange={e => set('email_pessoal', e.target.value)} /></div>
                   </div>
                 </div>
               )}
@@ -632,69 +713,176 @@ const Missionarios: React.FC = () => {
               {/* ══ STEP 3 — Dados Religiosos ══ */}
               {wizardStep === 2 && (
                 <div className="wizard-step-content">
-                  <div className="wizard-divider">Consagração e Votos</div>
+                  <div className="wizard-divider">{t('missionaries.wizard.religious.vows_title')}</div>
                   <div className="form-row-2">
-                    <div className="form-group"><label>Data Primeiros Votos</label><input type="date" value={wizardData.primeiros_votos_data} onChange={e => set('primeiros_votos_data', e.target.value)} /></div>
-                    <div className="form-group"><label>Data Votos Perpétuos</label><input type="date" value={wizardData.votos_perpetuos_data} onChange={e => set('votos_perpetuos_data', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.religious.first_vows')}</label><input type="date" value={wizardData.primeiros_votos_data} onChange={e => set('primeiros_votos_data', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.religious.perpetual_vows')}</label><input type="date" value={wizardData.votos_perpetuos_data} onChange={e => set('votos_perpetuos_data', e.target.value)} /></div>
                   </div>
-                  <div className="form-group full"><label>Lugar de Profissão</label><input type="text" value={wizardData.lugar_profissao} onChange={e => set('lugar_profissao', e.target.value)} /></div>
-                  <div className="wizard-divider">Ordenação</div>
+                  <div className="form-group full"><label>{t('missionaries.wizard.religious.profession_place')}</label><input type="text" value={wizardData.lugar_profissao} onChange={e => set('lugar_profissao', e.target.value)} /></div>
+                  <div className="wizard-divider">{t('missionaries.wizard.religious.ordination_title')}</div>
                   <div className="form-row-2">
-                    <div className="form-group"><label>Data do Diaconato</label><input type="date" value={wizardData.diaconato_data} onChange={e => set('diaconato_data', e.target.value)} /></div>
-                    <div className="form-group"><label>Data do Presbiterato</label><input type="date" value={wizardData.presbiterato_data} onChange={e => set('presbiterato_data', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.religious.diaconate')}</label><input type="date" value={wizardData.diaconato_data} onChange={e => set('diaconato_data', e.target.value)} /></div>
+                    <div className="form-group"><label>{t('missionaries.wizard.religious.presbiterato')}</label><input type="date" value={wizardData.presbiterato_data} onChange={e => set('presbiterato_data', e.target.value)} /></div>
                   </div>
-                  <div className="form-group full"><label>Bispo Ordenante</label><input type="text" value={wizardData.bispo_ordenante} onChange={e => set('bispo_ordenante', e.target.value)} /></div>
+                  <div className="form-group full"><label>{t('missionaries.wizard.religious.ordaining_bishop')}</label><input type="text" value={wizardData.bispo_ordenante} onChange={e => set('bispo_ordenante', e.target.value)} /></div>
                   <div className="form-group full">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={wizardData.is_oconomo} onChange={e => set('is_oconomo', e.target.checked)} />
-                      É Ecônomo — acessa relatórios financeiros e marca apontamentos
+                      {t('missionaries.wizard.religious.is_oconomo')}
                     </label>
                   </div>
                   <div className="form-group full">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={wizardData.is_superior} onChange={e => set('is_superior', e.target.checked)} />
-                      É Superior Local — cargo de liderança na casa religiosa
+                      {t('missionaries.wizard.religious.is_superior')}
                     </label>
                   </div>
                 </div>
               )}
 
-              {/* ══ STEP 4 — Casas Religiosas ══ */}
+              {/* ══ STEP Itinerário ══ */}
               {wizardStep === 3 && (
                 <div className="wizard-step-content">
+                  <div className="wizard-divider">Itinerário Formativo</div>
+                  <p className="wizard-hint">Preencha os dados das etapas de formação do missionário.</p>
+                  
+                  <div className="itinerary-wizard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                    {[
+                      { label: '4.1 Seminário', etapa: 'SEMINARIO', isSub: false },
+                      { label: '4.1.1 Seminário Menor', etapa: 'SEMINARIO', isSub: true },
+                      { label: '4.1.2 Propedêutico', etapa: 'PROPEDEUTICO', isSub: true },
+                      { label: '4.1.3 Filosofia', etapa: 'FILOSOFIA', isSub: true },
+                      { label: '4.1.4 Postulado', etapa: 'POSTULADO', isSub: true }
+                    ].map((seg, idx) => {
+                       const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub) || { etapa: seg.etapa, is_sub_etapa: seg.isSub, local: '', periodo: '' };
+                       return (
+                         <div key={idx} className="itin-wz-card" style={{ padding: '12px', border: '1px solid #eee', borderRadius: '8px', background: '#fcfcfc' }}>
+                           <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '8px' }}>{seg.label}</div>
+                           <div style={{ display: 'flex', gap: '10px' }}>
+                             <div className="form-group" style={{ flex: 1 }}>
+                               <label style={{ fontSize: '0.75rem' }}>Local</label>
+                               <input 
+                                 type="text" 
+                                 value={stage.local} 
+                                 onChange={e => {
+                                   const newItin = [...wizardData.itinerario];
+                                   const targetIdx = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
+                                   if (targetIdx > -1) newItin[targetIdx].local = e.target.value;
+                                   set('itinerario', newItin);
+                                 }}
+                                 placeholder="Local da formação..."
+                               />
+                             </div>
+                             <div className="form-group" style={{ flex: 1 }}>
+                               <label style={{ fontSize: '0.75rem' }}>Período</label>
+                               <input 
+                                 type="text" 
+                                 value={stage.periodo} 
+                                 onChange={e => {
+                                   const newItin = [...wizardData.itinerario];
+                                   const targetIdx = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
+                                   if (targetIdx > -1) newItin[targetIdx].periodo = e.target.value;
+                                   set('itinerario', newItin);
+                                 }}
+                                 placeholder="Ex: 2020-2022"
+                               />
+                             </div>
+                           </div>
+                         </div>
+                       );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ══ STEP Formação & Missão ══ */}
+              {wizardStep === 4 && (
+                <div className="wizard-step-content">
+                  <div className="wizard-divider"><GraduationCap size={14} /> Formação Acadêmica Principal</div>
+                  <div className="form-group full">
+                    <label>Curso / Graduação</label>
+                    <input type="text" value={wizardData.formacao_curso} onChange={e => set('formacao_curso', e.target.value)} placeholder="Ex: Teologia, Filosofia, Administração..." />
+                  </div>
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Instituição / Faculdade</label>
+                      <input type="text" value={wizardData.formacao_instituicao} onChange={e => set('formacao_instituicao', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Período</label>
+                      <input type="text" value={wizardData.formacao_periodo} onChange={e => set('formacao_periodo', e.target.value)} placeholder="Ex: 2018-2022" />
+                    </div>
+                  </div>
+                  <p className="wizard-hint" style={{ marginTop: '10px' }}>
+                    Outras atividades e obras realizadas podem ser adicionadas no perfil após o cadastro.
+                  </p>
+                </div>
+              )}
+
+              {/* ══ STEP Saúde & Financeiro ══ */}
+              {wizardStep === 5 && (
+                <div className="wizard-step-content">
+                  <div className="wizard-divider"><Activity size={14} /> Dados de Saúde</div>
+                  <div className="form-row-3">
+                    <div className="form-group"><label>CNS (SUS)</label><input type="text" value={wizardData.saude_sus} onChange={e => set('saude_sus', e.target.value)} /></div>
+                    <div className="form-group"><label>Seguradora</label><input type="text" value={wizardData.saude_seguradora} onChange={e => set('saude_seguradora', e.target.value)} /></div>
+                    <div className="form-group"><label>Term. Carteira</label><input type="text" value={wizardData.saude_carteira} onChange={e => set('saude_carteira', e.target.value)} /></div>
+                  </div>
+
+                  <div className="wizard-divider" style={{ marginTop: '20px' }}><DollarSign size={14} /> Dados Financeiros & NIT</div>
+                  <div className="form-group full">
+                    <label>NIT (Número de Identificação do Trabalhador)</label>
+                    <input type="text" value={wizardData.nit} onChange={e => set('nit', e.target.value)} placeholder="000.00000.00-0" />
+                  </div>
+                  
+                  <div className="wizard-divider" style={{ marginTop: '10px', fontSize: '10px' }}>Conta Bancária Principal</div>
+                  <div className="form-row-2">
+                    <div className="form-group"><label>Tipo de Conta</label><input type="text" value={wizardData.banco_tipo} onChange={e => set('banco_tipo', e.target.value)} placeholder="Corrente, Poupança..." /></div>
+                    <div className="form-group"><label>Titularidade</label><input type="text" value={wizardData.banco_titular} onChange={e => set('banco_titular', e.target.value)} /></div>
+                  </div>
+                  <div className="form-row-2">
+                    <div className="form-group"><label>Agência</label><input type="text" value={wizardData.banco_agencia} onChange={e => set('banco_agencia', e.target.value)} /></div>
+                    <div className="form-group"><label>Número da Conta</label><input type="text" value={wizardData.banco_numero} onChange={e => set('banco_numero', e.target.value)} /></div>
+                  </div>
+                </div>
+              )}
+
+              {/* ══ STEP 4 — Casas Religiosas ══ */}
+              {wizardStep === 6 && (
+                <div className="wizard-step-content">
                   <p className="wizard-hint">
-                    Vincule o missionário às casas religiosas em que vai atuar. O tempo de permanência é registrado automaticamente a partir da data de entrada. O máximo por casa é 5 anos.
+                    {t('missionaries.wizard.houses.hint')}
                   </p>
 
                   {/* Add casa form */}
                   <div className="casa-wizard-add">
                     <div className="casa-wizard-add-fields">
                       <div className="form-group">
-                        <label>Casa Religiosa</label>
+                        <label>{t('missionaries.wizard.houses.select_house')}</label>
                         <select value={novaCasa.casa_id} onChange={e => setNovaCasa(p => ({ ...p, casa_id: e.target.value }))}>
                           <option value="">Selecione...</option>
                           {casasDisponiveis.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>
                       </div>
                       <div className="form-group">
-                        <label>Data de Início</label>
+                        <label>{t('missionaries.wizard.houses.start_date')}</label>
                         <input type="date" value={novaCasa.data_inicio} onChange={e => setNovaCasa(p => ({ ...p, data_inicio: e.target.value }))} />
                       </div>
                     </div>
                     <label className="checkbox-label" style={{ marginTop: '6px' }}>
                       <input type="checkbox" checked={novaCasa.is_superior} onChange={e => setNovaCasa(p => ({ ...p, is_superior: e.target.checked }))} />
-                      <Star size={14} /> Superior Local
+                      <Star size={14} /> {t('missionaries.wizard.houses.is_superior')}
                     </label>
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
                       <button className="btn-add-casa-wz" onClick={addCasaVinculo}>
-                        <Plus size={15} /> Vincular Casa
+                        <Plus size={15} /> {t('missionaries.wizard.houses.bind_btn')}
                       </button>
                     </div>
                   </div>
 
                   {/* Added houses list */}
                   {casasVinculos.length === 0 ? (
-                    <div className="casa-empty">Nenhuma casa vinculada ainda. Isso pode ser feito depois também.</div>
+                    <div className="casa-empty">{t('missionaries.wizard.houses.empty')}</div>
                   ) : (
                     <div className="casas-wz-list">
                       {casasVinculos.map((v, i) => (
@@ -704,9 +892,9 @@ const Missionarios: React.FC = () => {
                             <div>
                               <span className="casa-wz-nome">{casaNome(v.casa_id)}</span>
                               <div className="casa-wz-meta">
-                                <span>desde {new Date(v.data_inicio).toLocaleDateString('pt-BR')}</span>
+                                <span>{t('missionaries.wizard.houses.since')} {new Date(v.data_inicio).toLocaleDateString()}</span>
                                 <span className="duracao-pill">⏱ {calcDuracao(v.data_inicio)}</span>
-                                {v.is_superior && <span className="superior-pill"><Star size={11} /> Superior</span>}
+                                {v.is_superior && <span className="superior-pill"><Star size={11} /> {t('missionaries.wizard.houses.is_superior')}</span>}
                               </div>
                             </div>
                           </div>
@@ -720,50 +908,49 @@ const Missionarios: React.FC = () => {
 
                   <div className="casa-wz-info">
                     <AlertCircle size={14} />
-                    O tempo de permanência máximo numa casa é de <strong>5 anos</strong>.
-                    Casas podem ser alteradas a qualquer momento no perfil do missionário.
+                    {t('missionaries.wizard.houses.max_perm_hint')}
                   </div>
                 </div>
               )}
 
-              {/* ══ STEP 5 — Acesso Login ══ */}
-              {wizardStep === 4 && (
+              {/* ══ STEP 7 — Acesso Login ══ */}
+              {wizardStep === 7 && (
                 <div className="wizard-step-content">
-                  <div className="wizard-divider">Credenciais de Acesso</div>
+                  <div className="wizard-divider">{t('missionaries.wizard.access.title')}</div>
                   <p className="wizard-hint">
-                    O missionário terá acesso limitado ao sistema. Defina o e-mail e a senha iniciais.
+                    {t('missionaries.wizard.access.hint')}
                   </p>
                   <div className="form-group full">
-                    <label>E-mail de Login *</label>
+                    <label>{t('missionaries.wizard.access.email')}</label>
                     <input type="email" value={wizardData.login} onChange={e => set('login', e.target.value)} placeholder="padre@email.com" />
                   </div>
                   <div className="form-group full">
-                    <label>Senha *</label>
+                    <label>{t('missionaries.wizard.access.password')}</label>
                     <div className="password-group">
-                      <input type={showPassword ? 'text' : 'password'} value={wizardData.password} onChange={e => set('password', e.target.value)} placeholder="Mínimo 6 caracteres..." />
+                      <input type={showPassword ? 'text' : 'password'} value={wizardData.password} onChange={e => set('password', e.target.value)} placeholder={t('missionaries.wizard.access.pass_hint')} />
                       <button type="button" className="password-toggle" onClick={() => setShowPassword(p => !p)}>
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
                     </div>
                   </div>
                   <div className="form-group full">
-                    <label>Status da Conta</label>
+                    <label>{t('missionaries.wizard.access.account_status')}</label>
                     <select value={wizardData.status} onChange={e => set('status', e.target.value as 'ATIVO' | 'INATIVO')}>
-                      <option value="ATIVO">Ativo — pode acessar o sistema</option>
-                      <option value="INATIVO">Inativo — acesso bloqueado</option>
+                      <option value="ATIVO">{t('missionaries.wizard.access.active_desc')}</option>
+                      <option value="INATIVO">{t('missionaries.wizard.access.inactive_desc')}</option>
                     </select>
                   </div>
 
                   {/* Summary */}
                   <div className="wizard-summary">
-                    <h4>Resumo do cadastro</h4>
-                    <div className="summary-row"><span>Nome</span><strong>{wizardData.nome || '—'}</strong></div>
-                    <div className="summary-row"><span>Login</span><strong>{wizardData.login || '—'}</strong></div>
-                    <div className="summary-row"><span>Situação</span><strong>{wizardData.situacao}</strong></div>
-                    <div className="summary-row"><span>Ecônomo</span><strong>{wizardData.is_oconomo ? 'Sim' : 'Não'}</strong></div>
-                    <div className="summary-row"><span>Superior Local</span><strong>{wizardData.is_superior ? 'Sim' : 'Não'}</strong></div>
-                    <div className="summary-row"><span>Casas vinculadas</span><strong>{casasVinculos.length}</strong></div>
-                    <div className="summary-row"><span>Documentos</span><strong>{docs.length} arquivo{docs.length !== 1 ? 's' : ''}</strong></div>
+                    <h4>{t('missionaries.wizard.access.summary')}</h4>
+                    <div className="summary-row"><span>{t('missionaries.table.name')}</span><strong>{wizardData.nome || '—'}</strong></div>
+                    <div className="summary-row"><span>{t('missionaries.table.login')}</span><strong>{wizardData.login || '—'}</strong></div>
+                    <div className="summary-row"><span>{t('missionaries.table.situation')}</span><strong>{wizardData.situacao}</strong></div>
+                    <div className="summary-row"><span>{t('missionaries.table.oconomo')}</span><strong>{wizardData.is_oconomo ? t('common.yes') : t('common.no')}</strong></div>
+                    <div className="summary-row"><span>{t('missionaries.table.superior')}</span><strong>{wizardData.is_superior ? t('common.yes') : t('common.no')}</strong></div>
+                    <div className="summary-row"><span>{t('menu.houses')}</span><strong>{casasVinculos.length}</strong></div>
+                    <div className="summary-row"><span>{t('missionaries.wizard.docs.title')}</span><strong>{docs.length}</strong></div>
                   </div>
                 </div>
               )}
@@ -771,8 +958,8 @@ const Missionarios: React.FC = () => {
 
             {/* Footer */}
             <div className="wizard-footer">
-              <button className="btn-cancel" onClick={() => wizardStep > 0 ? setWizardStep(s => s - 1) : setIsWizardOpen(false)}>
-                {wizardStep > 0 ? <><ChevronLeft size={16} /> Voltar</> : 'Cancelar'}
+              <button className="btn-back" onClick={() => wizardStep > 0 ? setWizardStep(s => s - 1) : setIsWizardOpen(false)}>
+                {wizardStep > 0 ? <><ChevronLeft size={18} /> {t('missionaries.wizard.common.back')}</> : t('missionaries.wizard.common.cancel')}
               </button>
 
               <div className="step-dots">
@@ -784,12 +971,12 @@ const Missionarios: React.FC = () => {
                   if (wizardStep === 0 && !wizardData.nome.trim()) { alert('Informe o nome.'); return; }
                   setWizardStep(s => s + 1);
                 }}>
-                  Próximo <ChevronRight size={16} />
+                  {t('missionaries.wizard.common.next')} <ChevronRight size={16} />
                 </button>
               ) : (
                 <button className="btn-save" onClick={handleFinish} disabled={saveLoading}>
                   {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  Cadastrar Missionário
+                  {t('missionaries.wizard.access.btn_finish')}
                 </button>
               )}
             </div>

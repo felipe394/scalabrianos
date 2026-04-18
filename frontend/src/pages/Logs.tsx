@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import '../styles/Perfis.css';
 
@@ -13,6 +14,7 @@ interface LogEntry {
 }
 
 const Logs: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ const Logs: React.FC = () => {
       setLogs(res.data);
       setError(null);
     } catch {
-      setError('Erro ao carregar logs do sistema');
+      setError(t('missionaries.error_loading'));
     } finally {
       setIsLoading(false);
     }
@@ -36,7 +38,7 @@ const Logs: React.FC = () => {
 
   const formatDate = (dt: string) => {
     const d = new Date(dt);
-    return d.toLocaleString('pt-BR');
+    return d.toLocaleString(i18n.language === 'es' ? 'es-ES' : 'pt-BR');
   };
 
   const getAcaoClass = (acao: string) => {
@@ -47,30 +49,30 @@ const Logs: React.FC = () => {
   };
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
           <ClipboardList size={24} />
-          <h2>Logs do Sistema</h2>
+          <h2>{t('menu.system_logs')}</h2>
         </div>
-        <button className="btn-filter" onClick={fetchLogs}>Atualizar</button>
+        <button className="btn-filter" onClick={fetchLogs}>{t('financeiro.actions.refresh')}</button>
       </div>
 
       {isLoading ? (
-        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>Carregando logs...</p></div>
+        <div className="loading-state"><Loader2 className="animate-spin" size={32} /><p>{t('common.loading')}</p></div>
       ) : error ? (
-        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button className="btn-retry" onClick={fetchLogs}>Tentar novamente</button></div>
+        <div className="error-state"><AlertCircle size={32} /><p>{error}</p><button className="btn-retry" onClick={fetchLogs}>{t('common.retry')}</button></div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th>Data/Hora</th>
-                <th>Usuário</th>
-                <th>Ação</th>
+                <th>{t('logs.table.datetime')}</th>
+                <th>{t('logs.table.user')}</th>
+                <th>{t('logs.table.action')}</th>
                 <th>Entidade</th>
-                <th>Detalhes</th>
+                <th>{t('logs.table.details')}</th>
               </tr>
             </thead>
             <tbody>
@@ -85,7 +87,7 @@ const Logs: React.FC = () => {
                 </tr>
               ))}
               {logs.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>Nenhum log registrado ainda.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#888' }}>{t('missionaries.empty')}</td></tr>
               )}
             </tbody>
           </table>

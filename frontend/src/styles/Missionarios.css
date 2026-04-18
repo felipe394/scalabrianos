@@ -1,15 +1,46 @@
 /* Missionarios.css */
 
 /* ─── Table extras ─────── */
-.btn-icon-edit {
-  background: #e8f5e9; border: 1px solid #4caf50; color: #388e3c;
-  border-radius: 6px; padding: 4px 6px; cursor: pointer; transition: all 0.2s;
+/* ─── Standard Action Buttons ─────── */
+.btn-action-lite {
+  width: 32px;
+  height: 32px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.btn-icon-edit:hover { background: #4caf50; color: white; }
 
-.btn-ver-dados {
-  display: flex !important; align-items: center; gap: 4px;
-  padding: 6px 12px !important; font-size: 13px; font-weight: 600;
+.btn-action-lite:hover {
+  background-color: #f1f5f9;
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.btn-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-new:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(1, 51, 117, 0.2);
 }
 
 /* ─── Wizard modal ──────── */

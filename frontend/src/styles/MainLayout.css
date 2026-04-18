@@ -14,13 +14,26 @@
 .main-content {
     flex: 1;
     margin-left: 260px;
-    /* Sidebar width matching Sidebar.tsx */
-    padding: 2rem;
     background-color: var(--bg-color);
     min-height: calc(100vh - 100px);
-    transition: margin-left 0.3s ease;
+    transition: margin-left 0.3s ease-in-out;
+    width: calc(100% - 260px);
+    display: flex;
+    flex-direction: column;
 }
 
 .main-content.expanded {
     margin-left: 0;
+    width: 100%;
+}
+
+.page-container {
+    max-width: var(--page-max-width);
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    box-sizing: border-box;
 }

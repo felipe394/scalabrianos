@@ -8,6 +8,7 @@ interface User {
     email: string;
     role: UserRole;
     is_oconomo?: boolean;
+    is_superior?: boolean;
 }
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ interface AuthContextType {
     isAdminGeral: boolean;
     isPadre: boolean;
     isOconomo: boolean;
+    isSuperior: boolean;
     isAuthenticated: boolean;
 }
 
@@ -53,7 +55,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const userRole = user?.role || null;
     const isAdminGeral = userRole === 'ADMIN_GERAL';
     const isPadre = userRole === 'PADRE';
-    const isOconomo = isPadre && !!user?.is_oconomo;
+    const isOconomo = (isPadre || isAdminGeral) && !!user?.is_oconomo;
+    const isSuperior = !!user?.is_superior;
     const canEdit = isAdminGeral || userRole === 'ADMINISTRADOR';
     const isAuthenticated = !!token;
 
@@ -68,6 +71,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             isAdminGeral,
             isPadre,
             isOconomo,
+            isSuperior,
             isAuthenticated 
         }}>
             {children}

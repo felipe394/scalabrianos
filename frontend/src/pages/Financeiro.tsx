@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, Filter, DollarSign, Loader2, AlertCircle, 
+  Search, DollarSign, Loader2, 
   TrendingUp, TrendingDown, Wallet, Home as HomeIcon,
-  ChevronRight, Calendar, Download, RefreshCcw, User, MapPin
+  Calendar, Download, Plus, Check, X, Edit2, Trash2,
+  RefreshCcw, User, MapPin
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
-import '../styles/Relatorios.css'; // Utilizing the same CSS for now, it's generic enough
+import PlanilhaMensal from '../components/Financeiro/PlanilhaMensal';
+import '../styles/Relatorios.css';
+import '../styles/FinanceiroSpreadsheet.css';
 
 interface Lancamento {
   id: number;
@@ -16,11 +21,21 @@ interface Lancamento {
   descricao: string;
   valor: number;
   tipo_transacao: 'CREDITO' | 'DEBITO';
+  tipo_despesa: 'PESSOAL' | 'CASA';
+  categoria_id?: number;
+  categoria_nome?: string;
   data: string;
   status: string;
   registrado_por: number;
   registrado_por_nome: string;
   apontamento_texto?: string;
+}
+
+interface Categoria {
+  id: number;
+  nome: string;
+  tipo: 'CREDITO' | 'DEBITO';
+  categoria_pai: 'PESSOAL' | 'CASA';
 }
 
 interface Summary {
@@ -35,23 +50,39 @@ interface Casa {
 }
 
 const Financeiro: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [summary, setSummary] = useState<Summary>({ credito: 0, debito: 0, saldo: 0 });
   const [casas, setCasas] = useState<Casa[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [selectedCasa, setSelectedCasa] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedTipoDespesa, setSelectedTipoDespesa] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRegistradoPor, setFilterRegistradoPor] = useState('');
   const [filterRegiaoPais, setFilterRegiaoPais] = useState('');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
+  const [activeModule, setActiveModule] = useState<'movimentos' | 'planilha'>('planilha');
+  const { user } = useAuth();
+
+  // New/Edit Entry State
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [newEntry, setNewEntry] = useState<Partial<Lancamento>>({
+    tipo_transacao: 'DEBITO',
+    tipo_despesa: 'CASA',
+    data: new Date().toISOString().split('T')[0],
+    valor: 0,
+    descricao: ''
+  });
 
   useEffect(() => {
     fetchInitialData();
@@ -59,229 +90,199 @@ const Financeiro: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
-      const housesRes = await api.post(`${API_URL}/casas-religiosas/get`);
+      const [housesRes, catsRes] = await Promise.all([
+        api.post('/casas-religiosas/get'),
+        api.get('/categorias-financas')
+      ]);
       setCasas(housesRes.data);
+      setCategorias(catsRes.data);
+      
+      if (location.state?.house_id) {
+        setSelectedCasa(location.state.house_id.toString());
+      }
+      
       loadReport();
     } catch (err) {
       console.error(err);
-      setError('Erro ao carregar dados iniciais.');
+      setError(t('missionaries.error_loading'));
     }
   };
 
   const loadReport = async () => {
     setIsLoading(true);
     try {
-      const params = {
-        casa_id: selectedCasa || undefined,
-        status: selectedStatus || undefined,
-        data_inicio: dataInicio || undefined,
-        data_fim: dataFim || undefined
+      const filters = {
+        casa_id: selectedCasa || null,
+        status: selectedStatus || null,
+        tipo_despesa: selectedTipoDespesa || null,
+        data_inicio: dataInicio || null,
+        data_fim: dataFim || null,
+        search: searchTerm || null,
+        registrado_por: filterRegistradoPor || null,
+        regiao_pais: filterRegiaoPais || null
       };
 
-      const [relatorioRes, summaryRes] = await Promise.all([
-        api.get(`${API_URL}/financas-casa/relatorio`, { params }),
-        api.get(`${API_URL}/financas-casa/sumario`, { params })
+      const [dataRes, sumRes] = await Promise.all([
+        api.get('/financas-casa/relatorio', { params: filters }),
+        api.get('/financas-casa/sumario', { params: filters })
       ]);
 
-      setLancamentos(relatorioRes.data);
-      setSummary(summaryRes.data);
+      setLancamentos(dataRes.data);
+      setSummary(sumRes.data);
       setError(null);
     } catch (err) {
-      console.error(err);
-      setError('Erro ao carregar dados financeiros.');
+      setError(t('missionaries.error_loading'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExportExcel = () => {
-    const exportData = lancamentos.map(l => ({
-      ID: l.id,
-      Data: new Date(l.data).toLocaleDateString('pt-BR'),
-      Casa: l.casa_nome,
-      Descrição: l.descricao,
-      Tipo: l.tipo_transacao === 'CREDITO' ? 'Entrada (+)' : 'Saída (-)',
-      Valor: Number(l.valor),
-      Status: l.status,
-      RegistradoPor: l.registrado_por_nome,
-      Observações: l.apontamento_texto || ''
+  const exportToExcel = () => {
+    const data = lancamentos.map(l => ({
+      [t('logs.table.date')]: new Date(l.data).toLocaleDateString(),
+      [t('financeiro.table.description')]: l.descricao,
+      [t('financeiro.table.value')]: l.valor,
+      [t('logs.table.type')]: l.tipo_transacao,
+      [t('financeiro.table.expense_type')]: l.tipo_despesa,
+      [t('financeiro.table.category')]: l.categoria_nome,
+      [t('casas.title')]: l.casa_nome,
+      [t('financeiro.table.registered_by')]: l.registrado_por_nome,
+      'Status': l.status
     }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gestão Financeira");
-    XLSX.writeFile(workbook, `Gestao_Financeira_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
+    XLSX.writeFile(wb, `Financeiro_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const dashboardData = lancamentos.filter(l => {
-    const matchesSearch = l.descricao.toLowerCase().includes(searchTerm.toLowerCase()) || l.casa_nome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRegistradoPor = filterRegistradoPor === '' || l.registrado_por_nome?.toLowerCase().includes(filterRegistradoPor.toLowerCase());
-    const matchesRegiaoPais = filterRegiaoPais === '' || (
-      l.casa_nome.toLowerCase().includes(filterRegiaoPais.toLowerCase()) || 
-      (l.apontamento_texto && l.apontamento_texto.toLowerCase().includes(filterRegiaoPais.toLowerCase()))
-    );
-    return matchesSearch && matchesRegistradoPor && matchesRegiaoPais;
-  });
+  const handleCreateEntry = async () => {
+    if (!newEntry.casa_id || !newEntry.descricao || !newEntry.valor) {
+      alert('Preencha os campos obrigatórios (Casa, Descrição, Valor)');
+      return;
+    }
+    try {
+      await api.post('/financas-casa', newEntry);
+      setIsAddingNew(false);
+      setNewEntry({
+        tipo_transacao: 'DEBITO',
+        tipo_despesa: 'CASA',
+        data: new Date().toISOString().split('T')[0],
+        valor: 0,
+        descricao: ''
+      });
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleUpdateEntry = async (id: number) => {
+    try {
+      await api.put(`/financas-casa/${id}`, newEntry);
+      setEditingId(null);
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm(t('common.confirm_delete') || 'Deseja excluir?')) return;
+    try {
+      await api.delete(`/financas-casa/${id}`);
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const startEdit = (l: Lancamento) => {
+    setEditingId(l.id);
+    setNewEntry(l);
+  };
 
   return (
-    <div className="module-container">
+    <div className="page-container">
       <div className="page-header">
         <div className="title-with-badge">
-          <DollarSign size={24} color="#4a90e2" />
-          <h2>Gestão Financeira Geral</h2>
+          <DollarSign size={24} />
+          <h2>{t('financeiro.title')}</h2>
         </div>
         <div className="header-actions">
-          <button className="btn-refresh" onClick={loadReport} disabled={isLoading}>
-            <RefreshCcw size={18} className={isLoading ? 'animate-spin' : ''} /> Atualizar
+          <button className="btn-export" onClick={exportToExcel}>
+            <Download size={18} /> {t('financeiro.actions.export')}
           </button>
-          <button className="btn-export-excel" onClick={handleExportExcel} disabled={isLoading || lancamentos.length === 0}>
-            <Download size={18} /> Exportar Excel
-          </button>
+          {/* <button className="btn-new" onClick={() => setIsAddingNew(true)}>
+            <Plus size={18} /> {t('financeiro.actions.new_entry')}
+          </button> */}
+        </div>
+      </div>
+      <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
+        <div className="filters-grid-premium">
+          <div className="filter-item">
+            <label>{t('financeiro.filters.house')}</label>
+            <select value={selectedCasa} onChange={(e) => setSelectedCasa(e.target.value)}>
+              <option value="">{t('missionaries.filters.all')}</option>
+              {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </div>
+
+          <div className="filter-item">
+            <label>{t('financeiro.filters.status')}</label>
+            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+              <option value="">{t('missionaries.filters.all')}</option>
+              <option value="EFETIVADO">Efetivado</option>
+              <option value="PENDENTE">Pendente</option>
+            </select>
+          </div>
+
+          <div className="filter-item">
+            <label>Tipo Despesa</label>
+            <select value={selectedTipoDespesa} onChange={(e) => setSelectedTipoDespesa(e.target.value)}>
+              <option value="">{t('missionaries.filters.all')}</option>
+              <option value="PESSOAL">Pessoal</option>
+              <option value="CASA">Casa</option>
+            </select>
+          </div>
+
+          <div className="filter-item">
+            <label>Data Início</label>
+            <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+          </div>
+
+          <div className="filter-item">
+            <label>Data Fim</label>
+            <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+          </div>
+
+          <div className="filter-item">
+            <label>Registrado Por</label>
+            <input type="text" placeholder="Nome..." value={filterRegistradoPor} onChange={(e) => setFilterRegistradoPor(e.target.value)} />
+          </div>
+
+          <div className="filter-item">
+            <label>Região/País</label>
+            <input type="text" placeholder="Região..." value={filterRegiaoPais} onChange={(e) => setFilterRegiaoPais(e.target.value)} />
+          </div>
+
+          <div className="filter-item">
+            <label>Busca</label>
+            <input type="text" placeholder="Descrição..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="stats-grid">
-        <div className="stat-card blue">
-          <div className="stat-icon"><Wallet size={24} /></div>
-          <div className="stat-info">
-            <span className="stat-label">Saldo Consolidado</span>
-            <h3 className={`stat-value ${summary.saldo >= 0 ? 'positive' : 'negative'}`}>
-              R$ {Number(summary.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </h3>
-          </div>
-        </div>
-        <div className="stat-card green">
-          <div className="stat-icon"><TrendingUp size={24} /></div>
-          <div className="stat-info">
-            <span className="stat-label">Total Entradas (Crédito)</span>
-            <h3 className="stat-value">
-              R$ {Number(summary.credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </h3>
-          </div>
-        </div>
-        <div className="stat-card red">
-          <div className="stat-icon"><TrendingDown size={24} /></div>
-          <div className="stat-info">
-            <span className="stat-label">Total Saídas (Débito)</span>
-            <h3 className="stat-value">
-              R$ {Number(summary.debito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </h3>
-          </div>
-        </div>
-      </div>
+      <PlanilhaMensal casas={casas} categorias={categorias} />
 
-      {/* Filters */}
-      <div className="filters-card reports-filters">
-        <div className="filter-group">
-          <label><Search size={14} /> BUSCAR</label>
-          <input 
-            type="text" 
-            placeholder="Descriçao ou casa..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="filter-group">
-          <label><User size={14} /> REGISTRADO POR</label>
-          <input 
-            type="text" 
-            placeholder="Nome..." 
-            value={filterRegistradoPor}
-            onChange={(e) => setFilterRegistradoPor(e.target.value)}
-          />
-        </div>
-        <div className="filter-group">
-          <label><MapPin size={14} /> REGIÃO / PAÍS</label>
-          <input 
-            type="text" 
-            placeholder="Região/país..." 
-            value={filterRegiaoPais}
-            onChange={(e) => setFilterRegiaoPais(e.target.value)}
-          />
-        </div>
-        <div className="filter-group">
-          <label><HomeIcon size={14} /> CASA</label>
-          <select value={selectedCasa} onChange={(e) => setSelectedCasa(e.target.value)}>
-            <option value="">Todas as casas</option>
-            {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-        </div>
-        <div className="filter-group">
-          <label><Calendar size={14} /> PERÍODO INÍCIO</label>
-          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-        </div>
-        <div className="filter-group">
-          <label><Calendar size={14} /> PERÍODO FIM</label>
-          <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-        </div>
-        <div className="filter-group">
-          <label><Filter size={14} /> STATUS</label>
-          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
-            <option value="">Todos os status</option>
-            <option value="PENDENTE">Pendente</option>
-            <option value="VERIFICADO">Verificado</option>
-            <option value="APONTAMENTO">Apontamento</option>
-          </select>
-        </div>
-        <button className="btn-filter" onClick={loadReport} disabled={isLoading}>
-          <Filter size={18} /> Filtrar
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="loading-state">
-          <Loader2 className="animate-spin" size={32} />
-          <p>Consolidando dados financeiros...</p>
-        </div>
-      ) : error ? (
-        <div className="error-state">
-          <AlertCircle size={32} />
-          <p>{error}</p>
-        </div>
-      ) : (
-        <div className="data-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Casa</th>
-                <th>Descrição</th>
-                <th className="right">Valor</th>
-                <th className="center">Status</th>
-                <th>Registrado Por</th>
-                <th className="center">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboardData.map((item) => (
-                <tr key={item.id} className={item.tipo_transacao === 'CREDITO' ? 'row-credit' : 'row-debit'}>
-                  <td>{new Date(item.data).toLocaleDateString('pt-BR')}</td>
-                  <td><span className="casa-tag-small">{item.casa_nome}</span></td>
-                  <td className="bold">{item.descricao}</td>
-                  <td className={`right bold ${item.tipo_transacao === 'CREDITO' ? 'text-green' : 'text-red'}`}>
-                    {item.tipo_transacao === 'CREDITO' ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
-                  </td>
-                  <td className="center">
-                    <span className={`status-tag status-${item.status.toLowerCase()}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td>{item.registrado_por_nome}</td>
-                  <td className="center">
-                    <button className="btn-icon-view" title="Ver detalhes" onClick={() => navigate(`/missionarios/${item.registrado_por}`)}>
-                      <ChevronRight size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {dashboardData.length === 0 && (
-                <tr><td colSpan={7} className="empty-row">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* 
+        A tela de Movimentações Diárias foi ocultada a pedido do usuário 
+        mas o código permanece comentado abaixo para futuras necessidades.
+      */}
+      {/* 
+      {activeModule === 'movimentos' && (
+         ... 
       )}
+      */}
     </div>
   );
 };

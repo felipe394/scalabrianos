@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import '../../styles/Sidebar.css';
 
 interface SubItem {
@@ -23,10 +24,11 @@ interface MenuItem {
 
 const Sidebar: React.FC = () => {
   const { isSidebarOpen } = useLayout();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    'Administração': true,
+    [t('menu.admin')]: true,
     'Itinerário Formativo': false
   });
 
@@ -35,20 +37,20 @@ const Sidebar: React.FC = () => {
   };
 
   const menuItems: MenuItem[] = [
-    { icon: <HomeIcon size={20} />, label: 'Home', path: '/home' },
+    { icon: <HomeIcon size={20} />, label: t('menu.home'), path: '/home' },
     {
-      label: 'Administração',
+      label: t('menu.admin'),
       icon: <Settings size={20} />,
       subItems: [
-        { icon: <Lock size={18} />, label: 'Perfis (Admins)', path: '/administradores' },
-        { icon: <Users size={18} />, label: 'Cadastro de Missionário', path: '/missionarios' },
-        { icon: <ClipboardList size={18} />, label: 'Logs do Sistema', path: '/logs' },
-        { icon: <ShieldCheck size={18} />, label: 'Logs de Acesso', path: '/logs-acesso' },
+        { icon: <Lock size={18} />, label: t('menu.profiles'), path: '/administradores' },
+        { icon: <Users size={18} />, label: t('menu.missionaries'), path: '/missionarios' },
+        { icon: <ClipboardList size={18} />, label: t('menu.system_logs'), path: '/logs' },
+        { icon: <ShieldCheck size={18} />, label: t('menu.access_logs'), path: '/logs-acesso' },
       ]
     },
-    { icon: <HomeIcon size={20} />, label: 'Casas Religiosas', path: '/casas-religiosas' },
-    { icon: <DollarSign size={20} />, label: 'Gestão Financeira', path: '/financeiro' },
-    { icon: <PieChart size={20} />, label: 'Relatórios', path: '/relatorios' },
+    { icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' },
+    { icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' },
+    // { icon: <PieChart size={20} />, label: t('menu.reports'), path: '/relatorios' },
   ];
 
   if (!isSidebarOpen) return null;
@@ -98,7 +100,7 @@ const Sidebar: React.FC = () => {
       <div className="sidebar-footer">
         <div className="sidebar-item logout" onClick={() => navigate('/login')}>
           <span className="item-icon"><LogOut size={20} /></span>
-          <span className="item-label">Sair</span>
+          <span className="item-label">{t('menu.logout')}</span>
         </div>
       </div>
 

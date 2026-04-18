@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import logoVertical from '../assets/logo_vertical.png';
 import '../styles/Login.css';
 
 const Login: React.FC = () => {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,11 +35,11 @@ const Login: React.FC = () => {
         login(response.data.user, response.data.token);
         navigate('/home');
       } else {
-        setError(response.data.message || 'Falha na autenticação');
+        setError(response.data.message || t('common.error'));
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || 'Erro ao conectar ao servidor');
+      setError(err.response?.data?.message || t('common.error'));
     } finally {
       setIsLoading(false);
     }
@@ -62,7 +64,7 @@ const Login: React.FC = () => {
           <div className="input-group">
             <input
               type="email"
-              placeholder="Digite seu e-mail"
+              placeholder={t('login.email_placeholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -73,7 +75,7 @@ const Login: React.FC = () => {
           <div className="input-group password-group">
             <input
               type={showPassword ? 'text' : 'password'}
-              placeholder="Digite sua senha"
+              placeholder={t('login.password_placeholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -91,16 +93,16 @@ const Login: React.FC = () => {
           <div className="login-options">
             <label className="remember-me">
               <input type="checkbox" />
-              <span>Lembrar minha senha</span>
+              <span>{t('login.remember_me')}</span>
             </label>
           </div>
 
           <button type="submit" className="login-button" disabled={isLoading}>
-            {isLoading ? 'Acessando...' : 'Acessar'}
+            {isLoading ? t('login.loading') : t('login.submit')}
           </button>
 
           <div className="login-footer">
-            <a href="/forgot-password">Esqueci minha senha</a>
+            <a href="/forgot-password">{t('login.forgot_password')}</a>
           </div>
         </form>
       </div>
