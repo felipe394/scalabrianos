@@ -145,9 +145,9 @@ const PerfilMissionario: React.FC = () => {
 
   // Itinerary state
   const [itinerarioStages, setItinerarioStages] = useState<ItineraryStage[]>([]);
-  const [isSavingItinerary, setIsSavingItinerary] = useState(false);
-  const [isSavingSteps, setIsSavingSteps] = useState(false);
-  const [itinDocUploading, setItinDocUploading] = useState<number | null>(null);
+  const [, setIsSavingItinerary] = useState(false);
+  const [, setIsSavingSteps] = useState(false);
+  const [, setItinDocUploading] = useState<number | null>(null);
   const itinFileInputRef = useRef<HTMLInputElement>(null);
   const [activeItinIdx, setActiveItinIdx] = useState<number | null>(null);
 
@@ -163,7 +163,6 @@ const PerfilMissionario: React.FC = () => {
   // Forms for adding
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
   const [tempForm, setTempForm] = useState<any>({});
-  const [tempDocUploading, setTempDocUploading] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
 
@@ -387,7 +386,7 @@ const PerfilMissionario: React.FC = () => {
     }
   };
 
-  const handleGenericAdd = async (endpoint: string, data: any, refreshFunc: () => void) => {
+  const handleGenericAdd = async (endpoint: string, data: any, _refreshFunc: () => void) => {
     setIsSaving(true);
     try {
       await api.post(`${API_URL}/usuarios/${id}/${endpoint}`, data);
@@ -617,7 +616,7 @@ const PerfilMissionario: React.FC = () => {
                   { label: '4.1.6 Teologia', etapa: '4.1.6' },
                   { label: '4.1.7 Tirocínio', etapa: '4.1.7' },
                 ].map((seg, idx) => {
-                  const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '' };
+                  const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
                   return (
                     <div key={seg.etapa} className="itinerary-row-card">
                       <div className="itin-label">{seg.label}</div>
@@ -655,7 +654,7 @@ const PerfilMissionario: React.FC = () => {
                   { label: '4.3.4 Presbiterato', etapa: '4.3.4' },
                   { label: '4.4 Destinação', etapa: '4.4' },
                 ].map((seg, idx) => {
-                  const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '' };
+                  const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
                   return (
                     <div key={seg.etapa} className="itinerary-row-card simple">
                       <div className="itin-label">{seg.label}</div>

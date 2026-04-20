@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, LogOut, Languages } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +53,7 @@ const Header: React.FC = () => {
 
         <div className="user-info" onClick={() => navigate('/login')}>
           <span>Admin</span>
-          <LogOut size={20} className="logout-icon" title={t('header.logout')} />
+          <LogOut size={20} className="logout-icon" aria-label={t('header.logout')} />
         </div>
       </div>
 

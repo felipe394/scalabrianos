@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Save, Loader2, AlertCircle, CheckCircle, XCircle, 
+  Save, Loader2, CheckCircle, XCircle,
   Calendar, FileText, Download, TrendingUp, TrendingDown 
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -51,7 +51,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
   const [selectedMes, setSelectedMes] = useState(new Date().toISOString().slice(0, 7));
   const [selectedCasa, setSelectedCasa] = useState('');
   const [planilha, setPlanilha] = useState<PlanilhaData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [editValues, setEditValues] = useState<Record<number, number>>({});
@@ -60,7 +60,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
   // Consolidated view state
   const [viewMode, setViewMode] = useState<'individual' | 'consolidado'>('individual');
   const [consolidadoData, setConsolidadoData] = useState<ConsolidatedRow[]>([]);
-  const [isConsolidadoLoading, setIsConsolidadoLoading] = useState(false);
+  const [, setIsConsolidadoLoading] = useState(false);
 
   const canValidate = user?.role === 'ADMIN_GERAL' || user?.is_oconomo;
 

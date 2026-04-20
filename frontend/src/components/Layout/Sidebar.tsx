@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  Users, PieChart, Lock, ClipboardList, DollarSign, ShieldCheck
+  Users, Lock, ClipboardList, DollarSign, ShieldCheck
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';

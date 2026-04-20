@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, DollarSign, Loader2, 
-  TrendingUp, TrendingDown, Wallet, Home as HomeIcon,
-  Calendar, Download, Plus, Check, X, Edit2, Trash2,
-  RefreshCcw, User, MapPin
-} from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { DollarSign, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api';
 import PlanilhaMensal from '../components/Financeiro/PlanilhaMensal';
@@ -51,14 +45,13 @@ interface Casa {
 
 const Financeiro: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const location = useLocation();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [summary, setSummary] = useState<Summary>({ credito: 0, debito: 0, saldo: 0 });
+  const [, setSummary] = useState<Summary>({ credito: 0, debito: 0, saldo: 0 });
   const [casas, setCasas] = useState<Casa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setIsLoading] = useState(true);
+  const [, setError] = useState<string | null>(null);
 
   // Filters
   const [selectedCasa, setSelectedCasa] = useState('');
@@ -69,20 +62,6 @@ const Financeiro: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRegistradoPor, setFilterRegistradoPor] = useState('');
   const [filterRegiaoPais, setFilterRegiaoPais] = useState('');
-
-  const [activeModule, setActiveModule] = useState<'movimentos' | 'planilha'>('planilha');
-  const { user } = useAuth();
-
-  // New/Edit Entry State
-  const [isAddingNew, setIsAddingNew] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [newEntry, setNewEntry] = useState<Partial<Lancamento>>({
-    tipo_transacao: 'DEBITO',
-    tipo_despesa: 'CASA',
-    data: new Date().toISOString().split('T')[0],
-    valor: 0,
-    descricao: ''
-  });
 
   useEffect(() => {
     fetchInitialData();
@@ -153,52 +132,6 @@ const Financeiro: React.FC = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
     XLSX.writeFile(wb, `Financeiro_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const handleCreateEntry = async () => {
-    if (!newEntry.casa_id || !newEntry.descricao || !newEntry.valor) {
-      alert('Preencha os campos obrigatórios (Casa, Descrição, Valor)');
-      return;
-    }
-    try {
-      await api.post('/financas-casa', newEntry);
-      setIsAddingNew(false);
-      setNewEntry({
-        tipo_transacao: 'DEBITO',
-        tipo_despesa: 'CASA',
-        data: new Date().toISOString().split('T')[0],
-        valor: 0,
-        descricao: ''
-      });
-      loadReport();
-    } catch (err: any) {
-      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const handleUpdateEntry = async (id: number) => {
-    try {
-      await api.put(`/financas-casa/${id}`, newEntry);
-      setEditingId(null);
-      loadReport();
-    } catch (err: any) {
-      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm(t('common.confirm_delete') || 'Deseja excluir?')) return;
-    try {
-      await api.delete(`/financas-casa/${id}`);
-      loadReport();
-    } catch (err: any) {
-      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const startEdit = (l: Lancamento) => {
-    setEditingId(l.id);
-    setNewEntry(l);
   };
 
   return (
