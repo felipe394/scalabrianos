@@ -1,21 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, Home as HouseIcon, FileText, Activity,
-  UserCheck, UserMinus, Loader2
+  UserCheck, UserMinus, Loader2, DollarSign, AlertCircle, ArrowRight
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import '../styles/Home.css';
 
 interface DashboardStats {
-  totalUsers: number;
-  totalHouses: number;
-  totalItineraries: number;
+  totalUsers?: number;
+  totalHouses?: number;
+  totalItineraries?: number;
+  isMissionary?: boolean;
+  houseName?: string;
+  regional?: string;
+  spreadsheetStatus?: string;
   recentActivities: Array<{ id: number, user: string, activity: string, time: string }>;
 }
 
 const Home: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [statsData, setStatsData] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -34,12 +42,19 @@ const Home: React.FC = () => {
     }
   };
 
-  const stats = [
-    { label: t('dashboard.stats.total_members'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375' },
-    { label: t('dashboard.stats.houses'), value: statsData?.totalHouses?.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
-    { label: t('dashboard.stats.docs'), value: '458', icon: <FileText size={24} />, color: '#013375' },
-    { label: t('dashboard.stats.stages'), value: statsData?.totalItineraries?.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
-  ];
+  const stats = statsData?.isMissionary 
+    ? [
+        { label: 'Sua Casa Atual', value: statsData.houseName || '---', icon: <HouseIcon size={24} />, color: '#013375' },
+        { label: 'Regional / Província', value: statsData.regional || '---', icon: <HouseIcon size={24} />, color: '#013375' },
+        { label: 'Status Financeiro (Mês)', value: statsData.spreadsheetStatus || 'N/A', icon: <FileText size={24} />, color: statsData.spreadsheetStatus === 'VALIDADO' ? '#10b981' : '#f59e0b' },
+        { label: 'Notificações', value: (statsData.recentActivities?.length || 0).toString(), icon: <Activity size={24} />, color: '#013375' },
+      ]
+    : [
+        { label: t('dashboard.stats.total_members'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375' },
+        { label: t('dashboard.stats.houses'), value: statsData?.totalHouses?.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
+        { label: t('dashboard.stats.docs'), value: '458', icon: <FileText size={24} />, color: '#013375' },
+        { label: t('dashboard.stats.stages'), value: statsData?.totalItineraries?.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
+      ];
 
   if (isLoading) {
     return (
@@ -57,6 +72,47 @@ const Home: React.FC = () => {
           <h2>{t('dashboard.overview')}</h2>
         </div>
       </div>
+
+      {statsData?.isMissionary && statsData?.spreadsheetStatus === 'DEVOLVIDO' && (
+        <div className="alert-banner-returned" style={{ 
+          background: '#fee2e2', 
+          border: '1px solid #ef4444', 
+          padding: '16px', 
+          borderRadius: '12px', 
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#b91c1c'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertCircle size={24} />
+            <div>
+              <h4 style={{ margin: 0, fontWeight: 700 }}>Planilha Devolvida para Revisão</h4>
+              <p style={{ margin: '4px 0 0', fontSize: '14px', opacity: 0.9 }}>
+                O ecônomo solicitou alterações na sua planilha do mês atual. Por favor, revise os comentários e re-submeta.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={() => navigate('/financeiro')}
+            style={{ 
+              background: '#ef4444', 
+              color: 'white', 
+              border: 'none', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            Corrigir Agora <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
 
       <div className="stats-grid">
         {stats.map((stat, index) => (
@@ -97,14 +153,29 @@ const Home: React.FC = () => {
             <h3>{t('dashboard.quick_access.title')}</h3>
           </div>
           <div className="quick-grid">
-            <button className="quick-btn">
-              <UserCheck size={20} />
-              <span>{t('dashboard.quick_access.validate_profiles')}</span>
-            </button>
-            <button className="quick-btn">
-              <FileText size={20} />
-              <span>{t('dashboard.quick_access.new_reports')}</span>
-            </button>
+            {statsData?.isMissionary ? (
+               <>
+                 <button className="quick-btn" onClick={() => navigate('/financeiro')}>
+                   <DollarSign size={20} />
+                   <span>Preencher Planilha</span>
+                 </button>
+                 <button className="quick-btn" onClick={() => navigate('/missionarios/' + (user?.id || ''))}>
+                   <UserCheck size={20} />
+                   <span>Ver Meu Perfil</span>
+                 </button>
+               </>
+            ) : (
+              <>
+                <button className="quick-btn" onClick={() => navigate('/missionarios')}>
+                  <UserCheck size={20} />
+                  <span>{t('dashboard.quick_access.validate_profiles')}</span>
+                </button>
+                <button className="quick-btn" onClick={() => navigate('/financeiro')}>
+                  <FileText size={20} />
+                  <span>{t('dashboard.quick_access.new_reports')}</span>
+                </button>
+              </>
+            )}
             <button className="quick-btn warning">
               <UserMinus size={20} />
               <span>{t('dashboard.quick_access.pendencies')}</span>

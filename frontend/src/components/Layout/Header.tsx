@@ -5,12 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import logo from '../../assets/logo_vertical.png';
 import NotificationBell from './NotificationBell';
+import { useAuth } from '../../context/AuthContext';
 import '../../styles/Header.css';
 
 const Header: React.FC = () => {
   const { toggleSidebar } = useLayout();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+
+  const isMissionary = user?.role === 'PADRE';
 
   const handleLanguageChange = (lang: string) => {
     i18n.changeLanguage(lang);
@@ -28,22 +32,24 @@ const Header: React.FC = () => {
       </div>
 
       <div className="header-center">
-        <h1 className="header-title">{t('header.title')}</h1>
+        <h1 className="header-title">
+          {isMissionary ? 'Portal Scalabrinianos Missionário' : t('header.title')}
+        </h1>
       </div>
 
       <div className="header-right">
         <NotificationBell />
-        
+
         <div className="language-selector">
-          <button 
-            className={`lang-btn ${i18n.language.startsWith('pt') ? 'active' : ''}`} 
+          <button
+            className={`lang-btn ${i18n.language.startsWith('pt') ? 'active' : ''}`}
             onClick={() => handleLanguageChange('pt')}
             title="Português"
           >
             PT
           </button>
-          <button 
-            className={`lang-btn ${i18n.language.startsWith('es') ? 'active' : ''}`} 
+          <button
+            className={`lang-btn ${i18n.language.startsWith('es') ? 'active' : ''}`}
             onClick={() => handleLanguageChange('es')}
             title="Español"
           >
@@ -52,8 +58,13 @@ const Header: React.FC = () => {
         </div>
 
         <div className="user-info" onClick={() => navigate('/login')}>
+
           <span>Admin</span>
           <LogOut size={20} className="logout-icon" aria-label={t('header.logout')} />
+
+          <span>{user?.nome || 'Admin'}</span>
+          <LogOut size={20} className="logout-icon" title={t('header.logout')} />
+          (🚀: Telas de missionário, uploads de docs e APIs funcionando.)
         </div>
       </div>
 

@@ -229,20 +229,282 @@
   .form-grid-3 { grid-template-columns: 1fr; }
 }
 
-.doc-upload-box-premium {
+/* ─── Document Upload Zone ────────────────────────────────────── */
+.doc-upload-zone {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 16px;
-  border-radius: 12px;
-  margin-bottom: 20px;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #f8faff 0%, #f1f5f9 100%);
+  border: 1.5px dashed #c7d7f4;
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  transition: border-color 0.2s;
 }
 
-@media (max-width: 480px) {
-  .doc-upload-box-premium { flex-direction: column; align-items: stretch; }
-  .doc-upload-box-premium .btn-save-perfil { margin-top: 0 !important; }
+.doc-upload-zone:hover {
+  border-color: var(--primary);
+}
+
+.doc-upload-icon-area {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #e8f0ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.doc-upload-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.doc-upload-fields .form-group {
+  flex: 1;
+}
+
+.btn-upload-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-upload-doc:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(1, 51, 117, 0.2);
+}
+
+.btn-upload-doc:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.doc-upload-hint {
+  width: 100%;
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  padding-top: 4px;
+  padding-left: 72px;
+}
+
+/* ─── Document Cards Grid ─────────────────────────────────────── */
+/* ─── Document Cards Grid (side by side) ──────────────────────── */
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.doc-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 18px 14px 14px;
+  background: white;
+  border: 1.5px solid #dde6f4;
+  border-radius: 14px;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.doc-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 16px rgba(1, 51, 117, 0.1);
+  transform: translateY(-3px);
+}
+
+.doc-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.doc-card-icon.pdf {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.doc-card-icon.img {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.doc-card-icon.file {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.doc-type-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.doc-card-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.doc-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
+}
+
+.doc-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.doc-filename {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  display: none; /* hide filename in grid — too small */
+}
+
+.doc-date {
+  font-size: 10px;
+  color: #b0bec5;
+  flex-shrink: 0;
+}
+
+.doc-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.doc-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.18s;
+  font-size: 0;
+  flex-shrink: 0;
+}
+
+.doc-btn.view:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+
+.doc-btn.download:hover {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+.doc-btn.delete:hover {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+@media (max-width: 600px) {
+  .doc-upload-zone { flex-direction: column; align-items: stretch; }
+  .doc-upload-hint { padding-left: 0; }
+  .doc-upload-fields { flex-wrap: wrap; }
+  .doc-card { flex-wrap: wrap; }
+}
+
+
+
+/* ─── Field Validation Hints ──────────────────────────────────── */
+.field-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.2px;
+  margin-top: 2px;
+  transition: color 0.2s;
+}
+
+.field-hint.warn {
+  color: #d97706;
+}
+
+.field-hint.ok {
+  color: #16a34a;
+}
+
+.field-hint.error {
+  color: #dc2626;
+}
+
+/* Highlight input border based on validation state */
+.form-group:has(.field-hint.warn) input {
+  border-color: #fbbf24;
+}
+
+.form-group:has(.field-hint.ok) input {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.form-group:has(.field-hint.error) input {
+  border-color: #fca5a5;
+  background: #fff5f5;
 }
 
 .form-group { display: flex; flex-direction: column; gap: 5px; }

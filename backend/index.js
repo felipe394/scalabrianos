@@ -138,6 +138,9 @@ app.post('/api/login', async (req, res) => {
 
     await logAccess(user.id, 'LOGIN', req, 'Autenticação bem-sucedida');
 
+    const [houseRow] = await db.query('SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1', [user.id]);
+    const casaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+
     res.json({
       success: true,
       user: {
@@ -146,7 +149,8 @@ app.post('/api/login', async (req, res) => {
         email: user.login,
         role: user.role,
         is_superior: !!user.is_superior,
-        is_oconomo: !!user.is_oconomo
+        is_oconomo: !!user.is_oconomo,
+        casa_id: casaId
       },
       token
     });
@@ -161,8 +165,127 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Diagnostic endpoint
+app.get('/api/debug/db-check', async (req, res) => {
+  try {
+    const [tables] = await db.query('SHOW TABLES');
+    const tableNames = tables.map(row => Object.values(row)[0]);
+    
+    // Check specific tables reported as failing
+    const status = {};
+    const tablesToCheck = [
+      'tb_usuarios', 'tb_documentos', 'tb_formacao_academica', 
+      'tb_atividade_missionaria', 'tb_saude', 'tb_contas_bancarias',
+      'tb_obras_realizadas', 'tb_observacoes_gerais', 'tb_dados_situacao'
+    ];
+    
+    for (const table of tablesToCheck) {
+      status[table] = tableNames.includes(table) ? 'EXISTS' : 'MISSING';
+    }
+
+    res.json({
+      db_connected: true,
+      tables: tableNames,
+      check_status: status
+    });
+  } catch (err) {
+    res.status(500).json({ db_connected: false, error: err.message });
+  }
+});
+
+app.get('/api/debug/run-migration-10', async (req, res) => {
+  const steps = [];
+  try {
+    console.log("[DEBUG] Running Migration 10 logic...");
+    
+    const queries = [
+      { name: 'nit_col', sql: `ALTER TABLE tb_dados_civis ADD COLUMN IF NOT EXISTS nit VARCHAR(50) AFTER passaporte_doc_path` },
+      { name: 'formacao', sql: `CREATE TABLE tb_formacao_academica (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, curso VARCHAR(255), faculdade VARCHAR(255), periodo VARCHAR(100), doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` },
+      { name: 'atividade', sql: `CREATE TABLE tb_atividade_missionaria (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, periodo VARCHAR(255), lugar VARCHAR(255), missao TEXT, doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` },
+      { name: 'saude', sql: `CREATE TABLE tb_saude (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, sus_card VARCHAR(100), seguradora VARCHAR(255), numero_carteira VARCHAR(100), doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` },
+      { name: 'contas', sql: `CREATE TABLE tb_contas_bancarias (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, tipo_conta VARCHAR(100), titularidade VARCHAR(255), agencia VARCHAR(50), numero VARCHAR(50), doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` },
+      { name: 'obras', sql: `CREATE TABLE tb_obras_realizadas (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, periodo VARCHAR(255), lugar VARCHAR(255), obra TEXT, doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` },
+      { name: 'obs', sql: `CREATE TABLE tb_observacoes_gerais (id INT AUTO_INCREMENT PRIMARY KEY, usuario_id INT NOT NULL, texto TEXT, doc_path VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE)` }
+    ];
+
+    for (const q of queries) {
+      try {
+        await db.query(q.sql);
+        steps.push({ name: q.name, status: 'SUCCESS' });
+      } catch (err) {
+        steps.push({ name: q.name, status: 'ERROR', message: err.message, code: err.code });
+      }
+    }
+
+    res.json({ success: true, steps });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, steps });
+  }
+});
+
+// Migration: Fix charset of tb_documentos to utf8mb4 (fixes macOS filenames with accents)
+app.get('/api/debug/fix-documentos-charset', async (req, res) => {
+  const steps = [];
+  try {
+    const queries = [
+      { name: 'alter_table', sql: `ALTER TABLE tb_documentos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` },
+      { name: 'alter_arquivo_nome', sql: `ALTER TABLE tb_documentos MODIFY arquivo_nome VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` },
+      { name: 'alter_descricao', sql: `ALTER TABLE tb_documentos MODIFY descricao VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` },
+      { name: 'alter_arquivo_path', sql: `ALTER TABLE tb_documentos MODIFY arquivo_path VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` },
+    ];
+    for (const q of queries) {
+      try {
+        await db.query(q.sql);
+        steps.push({ name: q.name, status: 'SUCCESS' });
+      } catch (err) {
+        steps.push({ name: q.name, status: 'ERROR', message: err.message });
+      }
+    }
+    res.json({ success: true, message: 'Charset migration applied', steps });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Helper to sanitize dates (convert empty string to null)
 const sanitizeDate = (date) => (date === '' || date === undefined || date === null) ? null : (typeof date === 'string' ? date.split('T')[0] : date);
+const sanitizeString = (str) => (str === '' || str === undefined || str === null) ? null : str;
+
+// Sanitize file names: normalize Unicode (NFC), remove NFD-decomposed diacritics,
+// replace spaces with underscores, strip any non-ASCII-safe characters.
+// This prevents ER_TRUNCATED_WRONG_VALUE_FOR_FIELD with macOS NFD filenames.
+const sanitizeFilename = (filename) => {
+  if (!filename) return 'documento';
+  // Normalize to NFC first, then try to decompose and strip combining marks (NFD -> strip Mn category)
+  let safe = filename
+    .normalize('NFC')          // canonical composition (handles macOS NFD)
+    // Transliterate common accented chars to ASCII equivalents
+    .replace(/[àáâãäå]/gi, 'a')
+    .replace(/[èéêë]/gi, 'e')
+    .replace(/[ìíîï]/gi, 'i')
+    .replace(/[òóôõö]/gi, 'o')
+    .replace(/[ùúûü]/gi, 'u')
+    .replace(/[ñ]/gi, 'n')
+    .replace(/[ç]/gi, 'c')
+    .replace(/[ýÿ]/gi, 'y')
+    // Remove remaining non-ASCII characters
+    .replace(/[^\x00-\x7F]/g, '')
+    // Replace spaces and problematic chars with underscore
+    .replace(/[\s]+/g, '_')
+    // Remove chars not allowed in filenames
+    .replace(/[^a-zA-Z0-9._\-]/g, '')
+    .trim();
+  // Ensure it still has the extension
+  if (!safe) safe = 'documento';
+  return safe;
+};
+
+// Ensure uploads directory exists
+const uploadsDataDir = path.join(__dirname, 'uploads', 'documentos');
+if (!fs.existsSync(uploadsDataDir)) {
+  fs.mkdirSync(uploadsDataDir, { recursive: true });
+  console.log('[BACKEND] Created uploads/documentos directory');
+}
 
 // Generic CRUD endpoints for tables
 // Users
@@ -605,9 +728,13 @@ app.get('/api/usuarios/:id/formacao-academica', authenticateToken, async (req, r
 app.post('/api/usuarios/:id/formacao-academica', authenticateToken, async (req, res) => {
   const { curso, faculdade, periodo, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_formacao_academica (usuario_id, curso, faculdade, periodo, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, curso, faculdade, periodo, doc_path]);
+    await db.query('INSERT INTO tb_formacao_academica (usuario_id, curso, faculdade, periodo, doc_path) VALUES (?, ?, ?, ?, ?)', 
+      [req.params.id, sanitizeString(curso), sanitizeString(faculdade), sanitizeString(periodo), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in formacao-academica:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/formacao-academica/:fid', authenticateToken, async (req, res) => {
@@ -628,9 +755,13 @@ app.get('/api/usuarios/:id/atividade-missionaria', authenticateToken, async (req
 app.post('/api/usuarios/:id/atividade-missionaria', authenticateToken, async (req, res) => {
   const { periodo, lugar, missao, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_atividade_missionaria (usuario_id, periodo, lugar, missao, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, periodo, lugar, missao, doc_path]);
+    await db.query('INSERT INTO tb_atividade_missionaria (usuario_id, periodo, lugar, missao, doc_path) VALUES (?, ?, ?, ?, ?)', 
+      [req.params.id, sanitizeString(periodo), sanitizeString(lugar), sanitizeString(missao), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in atividade-missionaria:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/atividade-missionaria/:aid', authenticateToken, async (req, res) => {
@@ -651,9 +782,13 @@ app.get('/api/usuarios/:id/saude', authenticateToken, async (req, res) => {
 app.post('/api/usuarios/:id/saude', authenticateToken, async (req, res) => {
   const { sus_card, seguradora, numero_carteira, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_saude (usuario_id, sus_card, seguradora, numero_carteira, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, sus_card, seguradora, numero_carteira, doc_path]);
+    await db.query('INSERT INTO tb_saude (usuario_id, sus_card, seguradora, numero_carteira, doc_path) VALUES (?, ?, ?, ?, ?)', 
+      [req.params.id, sanitizeString(sus_card), sanitizeString(seguradora), sanitizeString(numero_carteira), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in saude:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/saude/:sid', authenticateToken, async (req, res) => {
@@ -674,9 +809,13 @@ app.get('/api/usuarios/:id/contas-bancarias', authenticateToken, async (req, res
 app.post('/api/usuarios/:id/contas-bancarias', authenticateToken, async (req, res) => {
   const { tipo_conta, titularidade, agencia, numero, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_contas_bancarias (usuario_id, tipo_conta, titularidade, agencia, numero, doc_path) VALUES (?, ?, ?, ?, ?, ?)', [req.params.id, tipo_conta, titularidade, agencia, numero, doc_path]);
+    await db.query('INSERT INTO tb_contas_bancarias (usuario_id, tipo_conta, titularidade, agencia, numero, doc_path) VALUES (?, ?, ?, ?, ?, ?)', 
+      [req.params.id, sanitizeString(tipo_conta), sanitizeString(titularidade), sanitizeString(agencia), sanitizeString(numero), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in contas-bancarias:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/contas-bancarias/:bid', authenticateToken, async (req, res) => {
@@ -697,9 +836,13 @@ app.get('/api/usuarios/:id/obras-realizadas', authenticateToken, async (req, res
 app.post('/api/usuarios/:id/obras-realizadas', authenticateToken, async (req, res) => {
   const { periodo, lugar, obra, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_obras_realizadas (usuario_id, periodo, lugar, obra, doc_path) VALUES (?, ?, ?, ?, ?)', [req.params.id, periodo, lugar, obra, doc_path]);
+    await db.query('INSERT INTO tb_obras_realizadas (usuario_id, periodo, lugar, obra, doc_path) VALUES (?, ?, ?, ?, ?)', 
+      [req.params.id, sanitizeString(periodo), sanitizeString(lugar), sanitizeString(obra), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in obras-realizadas:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/obras-realizadas/:oid', authenticateToken, async (req, res) => {
@@ -720,9 +863,13 @@ app.get('/api/usuarios/:id/observacoes-gerais', authenticateToken, async (req, r
 app.post('/api/usuarios/:id/observacoes-gerais', authenticateToken, async (req, res) => {
   const { texto, doc_path } = req.body;
   try {
-    await db.query('INSERT INTO tb_observacoes_gerais (usuario_id, texto, doc_path) VALUES (?, ?, ?)', [req.params.id, texto, doc_path]);
+    await db.query('INSERT INTO tb_observacoes_gerais (usuario_id, texto, doc_path) VALUES (?, ?, ?)', 
+      [req.params.id, sanitizeString(texto), sanitizeString(doc_path)]);
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error('Error in observacoes-gerais:', err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 app.delete('/api/usuarios/:id/observacoes-gerais/:oid', authenticateToken, async (req, res) => {
@@ -730,6 +877,79 @@ app.delete('/api/usuarios/:id/observacoes-gerais/:oid', authenticateToken, async
     await db.query('DELETE FROM tb_observacoes_gerais WHERE id = ? AND usuario_id = ?', [req.params.oid, req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 8. Situação do Missionário (Campos condicionais)
+app.get('/api/usuarios/:id/situacao', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_dados_situacao WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows[0] || null);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/situacao', authenticateToken, async (req, res) => {
+  const {
+    data_falecimento, cidade_falecimento, certidao_obito_path, local_sepultamento,
+    egresso_incardinado_path, egresso_desistencia_path, egresso_laicizado_path,
+    egresso_transf_para_regiao_path, egresso_transf_da_regiao_path,
+    exclaustrado_data, exclaustrado_processo
+  } = req.body;
+  
+  try {
+    const [existing] = await db.query('SELECT id FROM tb_dados_situacao WHERE usuario_id = ?', [req.params.id]);
+    
+    if (existing.length > 0) {
+      await db.query(`
+        UPDATE tb_dados_situacao SET 
+          data_falecimento = ?, cidade_falecimento = ?, certidao_obito_path = ?, local_sepultamento = ?,
+          egresso_incardinado_path = ?, egresso_desistencia_path = ?, egresso_laicizado_path = ?,
+          egresso_transf_para_regiao_path = ?, egresso_transf_da_regiao_path = ?,
+          exclaustrado_data = ?, exclaustrado_processo = ?
+        WHERE usuario_id = ?
+      `, [
+        sanitizeDate(data_falecimento), 
+        sanitizeString(cidade_falecimento), 
+        sanitizeString(certidao_obito_path), 
+        sanitizeString(local_sepultamento),
+        sanitizeString(egresso_incardinado_path), 
+        sanitizeString(egresso_desistencia_path), 
+        sanitizeString(egresso_laicizado_path),
+        sanitizeString(egresso_transf_para_regiao_path), 
+        sanitizeString(egresso_transf_da_regiao_path),
+        sanitizeDate(exclaustrado_data), 
+        sanitizeString(exclaustrado_processo), 
+        req.params.id
+      ]);
+    } else {
+      await db.query(`
+        INSERT INTO tb_dados_situacao (
+          usuario_id, data_falecimento, cidade_falecimento, certidao_obito_path, local_sepultamento,
+          egresso_incardinado_path, egresso_desistencia_path, egresso_laicizado_path,
+          egresso_transf_para_regiao_path, egresso_transf_da_regiao_path,
+          exclaustrado_data, exclaustrado_processo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        req.params.id, 
+        sanitizeDate(data_falecimento), 
+        sanitizeString(cidade_falecimento), 
+        sanitizeString(certidao_obito_path), 
+        sanitizeString(local_sepultamento),
+        sanitizeString(egresso_incardinado_path), 
+        sanitizeString(egresso_desistencia_path), 
+        sanitizeString(egresso_laicizado_path),
+        sanitizeString(egresso_transf_para_regiao_path), 
+        sanitizeString(egresso_transf_da_regiao_path),
+        sanitizeDate(exclaustrado_data), 
+        sanitizeString(exclaustrado_processo)
+      ]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in situacao:', error);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 app.get('/api/financas-casa/casa/:casa_id', authenticateToken, async (req, res) => {
@@ -802,6 +1022,13 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
     }
 
     await connection.commit();
+    // 4. Mark notifications for this month as read/cleared
+    await db.query(`
+      UPDATE tb_notificacoes 
+      SET lida = TRUE 
+      WHERE usuario_id = ? AND mensagem LIKE ?
+    `, [usuario_id, `%planilha de ${mes_referencia} foi devolvida%`]);
+
     res.json({ success: true, id: planilhaId });
   } catch (error) {
     await connection.rollback();
@@ -826,15 +1053,68 @@ app.get('/api/financas-mensais/consolidado/casa/:casa_id/mes/:mes', authenticate
   }
 });
 
+app.get('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken, async (req, res) => {
+  const { casa_id, mes } = req.params;
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?', [casa_id, mes]);
+    if (rows.length === 0) {
+       // Return a default object if it doesn't exist
+       return res.json({ status: 'PENDENTE_ECONOMO', casa_id, mes_referencia: mes });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken, async (req, res) => {
+  const { casa_id, mes } = req.params;
+  const { status, apontamentos_economo, apontamentos_superior } = req.body;
+  try {
+    const [existing] = await db.query('SELECT id FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?', [casa_id, mes]);
+    if (existing.length > 0) {
+       await db.query(
+         'UPDATE tb_financas_consolidado SET status = ?, apontamentos_economo = IFNULL(?, apontamentos_economo), apontamentos_superior = IFNULL(?, apontamentos_superior) WHERE id = ?',
+         [status, apontamentos_economo, apontamentos_superior, existing[0].id]
+       );
+    } else {
+       await db.query(
+         'INSERT INTO tb_financas_consolidado (casa_id, mes_referencia, status, apontamentos_economo, apontamentos_superior) VALUES (?, ?, ?, ?, ?)',
+         [casa_id, mes, status, apontamentos_economo, apontamentos_superior]
+       );
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 app.put('/api/financas-mensais/:id/validar', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { status, apontamentos } = req.body;
   try {
+    // 1. Update status
     await db.query(
       'UPDATE tb_financas_mensais SET status = ?, apontamentos = ? WHERE id = ?',
       [status, apontamentos, id]
     );
+
+    // 2. Log Action
     await logAction(req.user.id, 'VALIDAR_PLANILHA_MENSAL', 'tb_financas_mensais', `Planilha ${id} validada como ${status}`);
+
+    // 3. Create Notification if returned (DEVOLVIDO)
+    if (status === 'DEVOLVIDO') {
+      const [sheet] = await db.query('SELECT usuario_id, mes_referencia FROM tb_financas_mensais WHERE id = ?', [id]);
+      if (sheet.length > 0) {
+        await createNotification(
+          sheet[0].usuario_id, 
+          `Sua planilha de ${sheet[0].mes_referencia} foi devolvida para correções. Motivo: ${apontamentos || 'Não especificado'}`,
+          'ALERTA',
+          '/financeiro'
+        );
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -1026,25 +1306,54 @@ app.get('/api/logs-acesso', authenticateToken, async (req, res) => {
 app.get('/api/usuarios/:id/documentos', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM tb_documentos WHERE usuario_id = ? ORDER BY created_at DESC', [req.params.id]);
-    res.json(rows);
+    // Map to frontend-expected shape: url (from arquivo_path) and data_upload (from created_at)
+    const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+    const docs = rows.map(r => ({
+      ...r,
+      url: r.arquivo_path ? `${BASE_URL}${r.arquivo_path}` : null,
+      data_upload: r.created_at
+    }));
+    res.json(docs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-app.post('/api/usuarios/:id/documentos', authenticateToken, upload.single('arquivo'), async (req, res) => {
+app.post('/api/usuarios/:id/documentos', authenticateToken, (req, res, next) => {
+  // Wrap multer to catch file-type/size errors with a friendly message
+  upload.single('arquivo')(req, res, (err) => {
+    if (err) {
+      console.error('[UPLOAD ERROR]', err.message);
+      return res.status(400).json({ message: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   const { descricao } = req.body;
-  if (!req.file) return res.status(400).json({ message: 'Arquivo não enviado' });
+  if (!req.file) return res.status(400).json({ message: 'Arquivo não enviado. Selecione um arquivo PDF, JPG ou PNG.' });
   const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+  // Sanitize filename to handle macOS NFD unicode / special chars that break MySQL latin1 columns
+  const safeFilename = sanitizeFilename(req.file.originalname);
   try {
     const filePath = `/uploads/documentos/${req.file.filename}`;
+    const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
     const [result] = await db.query(
       'INSERT INTO tb_documentos (usuario_id, descricao, arquivo_path, arquivo_nome, tipo_arquivo) VALUES (?, ?, ?, ?, ?)',
-      [req.params.id, descricao, filePath, req.file.originalname, ext]
+      [req.params.id, sanitizeString(descricao) || 'Documento', filePath, safeFilename, ext]
     );
     await logAction(req.user.id, 'UPLOAD_DOCUMENTO', 'tb_documentos', `Documento "${descricao}" enviado para usuario ${req.params.id}`);
-    res.json({ success: true, id: result.insertId, arquivo_path: filePath, arquivo_nome: req.file.originalname, tipo_arquivo: ext, descricao });
+    res.json({
+      success: true,
+      id: result.insertId,
+      arquivo_path: filePath,
+      url: `${BASE_URL}${filePath}`,
+      arquivo_nome: safeFilename,
+      tipo_arquivo: ext,
+      descricao: sanitizeString(descricao) || 'Documento',
+      data_upload: new Date().toISOString()
+    });
   } catch (error) {
+    console.error('[DOC INSERT ERROR]', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -1094,6 +1403,35 @@ app.put('/api/notificacoes/ler-todas', authenticateToken, async (req, res) => {
 
 app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'PADRE') {
+      // 1. Get user's current house
+      const [houseRow] = await db.query(`
+        SELECT c.nome, c.regional, mc.casa_id 
+        FROM tb_missionario_casas mc 
+        JOIN tb_casas_religiosas c ON mc.casa_id = c.id 
+        WHERE mc.usuario_id = ? AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) 
+        LIMIT 1
+      `, [req.user.id]);
+
+      const house = houseRow[0];
+
+      // 2. Get current month's spreadsheet status
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const [spreadsheet] = await db.query('SELECT status FROM tb_financas_mensais WHERE usuario_id = ? AND mes_referencia = ?', [req.user.id, currentMonth]);
+      
+      // 3. Get recent notifications
+      const [notifications] = await db.query('SELECT mensagem, created_at FROM tb_notificacoes WHERE usuario_id = ? ORDER BY created_at DESC LIMIT 5', [req.user.id]);
+
+      return res.json({
+        isMissionary: true,
+        houseName: house ? house.nome : 'Sem Casa Vinculada',
+        regional: house ? house.regional : '',
+        spreadsheetStatus: spreadsheet.length > 0 ? spreadsheet[0].status : 'NÃO INICIADA',
+        recentActivities: notifications.map((n, i) => ({ id: i, user: 'Sistema', activity: n.mensagem, time: n.created_at }))
+      });
+    }
+
+    // Admin view
     const [userCount] = await db.query('SELECT COUNT(*) as count FROM tb_usuarios');
     const [houseCount] = await db.query('SELECT COUNT(*) as count FROM tb_casas_religiosas');
     const [itineraryCount] = await db.query('SELECT COUNT(*) as count FROM tb_itinerario_formativo');
@@ -1112,7 +1450,30 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/stats', authenticateToken, async (req, res) => {
+  // Same logic as GET /stats, just to avoid 404/405 if frontend calls POST
   try {
+    if (req.user.role === 'PADRE') {
+      const [houseRow] = await db.query(`
+        SELECT c.nome, c.regional, mc.casa_id 
+        FROM tb_missionario_casas mc 
+        JOIN tb_casas_religiosas c ON mc.casa_id = c.id 
+        WHERE mc.usuario_id = ? AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) 
+        LIMIT 1
+      `, [req.user.id]);
+      const house = houseRow[0];
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const [spreadsheet] = await db.query('SELECT status FROM tb_financas_mensais WHERE usuario_id = ? AND mes_referencia = ?', [req.user.id, currentMonth]);
+      const [notifications] = await db.query('SELECT mensagem, created_at FROM tb_notificacoes WHERE usuario_id = ? ORDER BY created_at DESC LIMIT 5', [req.user.id]);
+
+      return res.json({
+        isMissionary: true,
+        houseName: house ? house.nome : 'Sem Casa Vinculada',
+        regional: house ? house.regional : '',
+        spreadsheetStatus: spreadsheet.length > 0 ? spreadsheet[0].status : 'NÃO INICIADA',
+        recentActivities: notifications.map((n, i) => ({ id: i, user: 'Sistema', activity: n.mensagem, time: n.created_at }))
+      });
+    }
+
     const [userCount] = await db.query('SELECT COUNT(*) as count FROM tb_usuarios');
     const [houseCount] = await db.query('SELECT COUNT(*) as count FROM tb_casas_religiosas');
     const [itineraryCount] = await db.query('SELECT COUNT(*) as count FROM tb_itinerario_formativo');

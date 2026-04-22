@@ -75,11 +75,13 @@ const Financeiro: React.FC = () => {
       ]);
       setCasas(housesRes.data);
       setCategorias(catsRes.data);
-      
-      if (location.state?.house_id) {
+
+      if (user?.role === 'PADRE' && user?.casa_id) {
+        setSelectedCasa(user.casa_id.toString());
+      } else if (location.state?.house_id) {
         setSelectedCasa(location.state.house_id.toString());
       }
-      
+
       loadReport();
     } catch (err) {
       console.error(err);
@@ -134,6 +136,58 @@ const Financeiro: React.FC = () => {
     XLSX.writeFile(wb, `Financeiro_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+
+
+  const handleCreateEntry = async () => {
+    if (!newEntry.casa_id || !newEntry.descricao || !newEntry.valor) {
+      alert('Preencha os campos obrigatórios (Casa, Descrição, Valor)');
+      return;
+    }
+    try {
+      await api.post('/financas-casa', newEntry);
+      setIsAddingNew(false);
+      setNewEntry({
+        tipo_transacao: 'DEBITO',
+        tipo_despesa: 'CASA',
+        data: new Date().toISOString().split('T')[0],
+        valor: 0,
+        descricao: ''
+      });
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleUpdateEntry = async (id: number) => {
+    try {
+      await api.put(`/financas-casa/${id}`, newEntry);
+      setEditingId(null);
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm(t('common.confirm_delete') || 'Deseja excluir?')) return;
+    try {
+      await api.delete(`/financas-casa/${id}`);
+      loadReport();
+    } catch (err: any) {
+      alert(t('common.error') + ': ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const startEdit = (l: Lancamento) => {
+    setEditingId(l.id);
+    setNewEntry(l);
+  };
+
+  const { isAdminGeral, canEdit, isOconomo, isSuperior } = useAuth();
+  const showAdvancedFilters = isAdminGeral || canEdit || isOconomo || isSuperior;
+
+>>>>>>> a674d87 (🚀: Telas de missionário, uploads de docs e APIs funcionando.)
   return (
     <div className="page-container">
       <div className="page-header">
@@ -150,60 +204,66 @@ const Financeiro: React.FC = () => {
           </button> */}
         </div>
       </div>
-      <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
-        <div className="filters-grid-premium">
-          <div className="filter-item">
-            <label>{t('financeiro.filters.house')}</label>
-            <select value={selectedCasa} onChange={(e) => setSelectedCasa(e.target.value)}>
-              <option value="">{t('missionaries.filters.all')}</option>
-              {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-          </div>
+      {showAdvancedFilters && (
+        <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
+          <div className="filters-grid-premium">
+            <div className="filter-item">
+              <label>{t('financeiro.filters.house')}</label>
+              <select
+                value={selectedCasa}
+                onChange={(e) => setSelectedCasa(e.target.value)}
+                disabled={user?.role === 'PADRE'}
+              >
+                <option value="">{t('missionaries.filters.all')}</option>
+                {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
 
-          <div className="filter-item">
-            <label>{t('financeiro.filters.status')}</label>
-            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
-              <option value="">{t('missionaries.filters.all')}</option>
-              <option value="EFETIVADO">Efetivado</option>
-              <option value="PENDENTE">Pendente</option>
-            </select>
-          </div>
+            <div className="filter-item">
+              <label>{t('financeiro.filters.status')}</label>
+              <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+                <option value="">{t('missionaries.filters.all')}</option>
+                <option value="EFETIVADO">Efetivado</option>
+                <option value="PENDENTE">Pendente</option>
+              </select>
+            </div>
 
-          <div className="filter-item">
-            <label>Tipo Despesa</label>
-            <select value={selectedTipoDespesa} onChange={(e) => setSelectedTipoDespesa(e.target.value)}>
-              <option value="">{t('missionaries.filters.all')}</option>
-              <option value="PESSOAL">Pessoal</option>
-              <option value="CASA">Casa</option>
-            </select>
-          </div>
+            <div className="filter-item">
+              <label>Tipo Despesa</label>
+              <select value={selectedTipoDespesa} onChange={(e) => setSelectedTipoDespesa(e.target.value)}>
+                <option value="">{t('missionaries.filters.all')}</option>
+                <option value="PESSOAL">Pessoal</option>
+                <option value="CASA">Casa</option>
+              </select>
+            </div>
 
-          <div className="filter-item">
-            <label>Data Início</label>
-            <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-          </div>
+            <div className="filter-item">
+              <label>Data Início</label>
+              <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+            </div>
 
-          <div className="filter-item">
-            <label>Data Fim</label>
-            <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-          </div>
+            <div className="filter-item">
+              <label>Data Fim</label>
+              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+            </div>
 
-          <div className="filter-item">
-            <label>Registrado Por</label>
-            <input type="text" placeholder="Nome..." value={filterRegistradoPor} onChange={(e) => setFilterRegistradoPor(e.target.value)} />
-          </div>
+            <div className="filter-item">
+              <label>Registrado Por</label>
+              <input type="text" placeholder="Nome..." value={filterRegistradoPor} onChange={(e) => setFilterRegistradoPor(e.target.value)} />
+            </div>
 
-          <div className="filter-item">
-            <label>Região/País</label>
-            <input type="text" placeholder="Região..." value={filterRegiaoPais} onChange={(e) => setFilterRegiaoPais(e.target.value)} />
-          </div>
+            <div className="filter-item">
+              <label>Região/País</label>
+              <input type="text" placeholder="Região..." value={filterRegiaoPais} onChange={(e) => setFilterRegiaoPais(e.target.value)} />
+            </div>
 
-          <div className="filter-item">
-            <label>Busca</label>
-            <input type="text" placeholder="Descrição..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <div className="filter-item">
+              <label>Busca</label>
+              <input type="text" placeholder="Descrição..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <PlanilhaMensal casas={casas} categorias={categorias} />
 

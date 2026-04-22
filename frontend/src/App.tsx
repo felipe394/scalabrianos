@@ -18,6 +18,7 @@ import Financeiro from './pages/Financeiro';
 import ForgotPassword from './pages/ForgotPassword';
 import MainLayout from './components/Layout/MainLayout';
 import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -25,31 +26,82 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/home" element={<MainLayout><Home /></MainLayout>} />
-          <Route path="/casas-religiosas" element={<MainLayout><CasasReligiosas /></MainLayout>} />
-
-          {/* Admin routes — keep old /perfis for backwards compatibility */}
-          <Route path="/perfis" element={<MainLayout><Perfis /></MainLayout>} />
-          <Route path="/administradores" element={<MainLayout><Administradores /></MainLayout>} />
-
-          {/* Missionary routes */}
-          <Route path="/missionarios" element={<MainLayout><Missionarios /></MainLayout>} />
-          <Route path="/missionarios/:id" element={<MainLayout><PerfilMissionario /></MainLayout>} />
-
-          {/* System logs */}
-          <Route path="/logs" element={<MainLayout><Logs /></MainLayout>} />
-          <Route path="/logs-acesso" element={<MainLayout><LogsAcesso /></MainLayout>} />
-
-          {/* Itinerary subroutes */}
-          <Route path="/itinerario-formativo" element={<MainLayout><ItinerarioFormativo /></MainLayout>} />
-          <Route path="/itinerario/seminarios" element={<MainLayout><Seminario /></MainLayout>} />
-          <Route path="/itinerario/propedeutico" element={<MainLayout><Propedeutico /></MainLayout>} />
-          <Route path="/itinerario/filosofia" element={<MainLayout><Filosofia /></MainLayout>} />
-          <Route path="/itinerario/postulado" element={<MainLayout><Postulado /></MainLayout>} />
-
-          <Route path="/relatorios" element={<MainLayout><Relatorios /></MainLayout>} />
-          <Route path="/financeiro" element={<MainLayout><Financeiro /></MainLayout>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          
+          <Route path="/home" element={
+            <ProtectedRoute>
+              <MainLayout><Home /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          {/* Admin routes — requireAdmin check */}
+          <Route path="/administradores" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><Administradores /></MainLayout>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/perfis" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><Perfis /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/missionarios" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><Missionarios /></MainLayout>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/logs" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><Logs /></MainLayout>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/logs-acesso" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><LogsAcesso /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          {/* Management routes — requireManagement (Admin, Oconomo or Superior) */}
+          <Route path="/casas-religiosas" element={
+            <ProtectedRoute requireManagement>
+              <MainLayout><CasasReligiosas /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/missionarios/:id" element={
+            <ProtectedRoute requireManagement>
+              <MainLayout><PerfilMissionario /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          {/* Itinerary subroutes — requireAdmin */}
+          <Route path="/itinerario-formativo" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><ItinerarioFormativo /></MainLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/itinerario/seminarios" element={<ProtectedRoute requireAdmin><MainLayout><Seminario /></MainLayout></ProtectedRoute>} />
+          <Route path="/itinerario/propedeutico" element={<ProtectedRoute requireAdmin><MainLayout><Propedeutico /></MainLayout></ProtectedRoute>} />
+          <Route path="/itinerario/filosofia" element={<ProtectedRoute requireAdmin><MainLayout><Filosofia /></MainLayout></ProtectedRoute>} />
+          <Route path="/itinerario/postulado" element={<ProtectedRoute requireAdmin><MainLayout><Postulado /></MainLayout></ProtectedRoute>} />
+
+          {/* Financeiro — accessible to all padres/admins */}
+          <Route path="/financeiro" element={
+            <ProtectedRoute>
+              <MainLayout><Financeiro /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/relatorios" element={
+            <ProtectedRoute requireAdmin>
+              <MainLayout><Relatorios /></MainLayout>
+            </ProtectedRoute>
+          } />
+
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>

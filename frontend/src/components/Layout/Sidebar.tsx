@@ -6,6 +6,7 @@ import {
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../context/AuthContext';
 import '../../styles/Sidebar.css';
 
 interface SubItem {
@@ -27,6 +28,8 @@ const Sidebar: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdminGeral, canEdit, isOconomo, isSuperior } = useAuth();
+
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     [t('menu.admin')]: true,
     'Itinerário Formativo': false
@@ -38,7 +41,11 @@ const Sidebar: React.FC = () => {
 
   const menuItems: MenuItem[] = [
     { icon: <HomeIcon size={20} />, label: t('menu.home'), path: '/home' },
-    {
+  ];
+
+  // Administration Menu - only for admins
+  if (isAdminGeral || canEdit) {
+    menuItems.push({
       label: t('menu.admin'),
       icon: <Settings size={20} />,
       subItems: [
@@ -47,11 +54,16 @@ const Sidebar: React.FC = () => {
         { icon: <ClipboardList size={18} />, label: t('menu.system_logs'), path: '/logs' },
         { icon: <ShieldCheck size={18} />, label: t('menu.access_logs'), path: '/logs-acesso' },
       ]
-    },
-    { icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' },
-    { icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' },
-    // { icon: <PieChart size={20} />, label: t('menu.reports'), path: '/relatorios' },
-  ];
+    });
+  }
+
+  // Houses - ONLY for admins
+  if (isAdminGeral || canEdit) {
+    menuItems.push({ icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' });
+  }
+
+  // Finance - for everyone
+  menuItems.push({ icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' });
 
   if (!isSidebarOpen) return null;
 

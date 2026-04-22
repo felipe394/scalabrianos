@@ -9,6 +9,7 @@ interface User {
     role: UserRole;
     is_oconomo?: boolean;
     is_superior?: boolean;
+    casa_id?: number | null;
 }
 
 interface AuthContextType {
@@ -28,15 +29,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<User | null>(() => {
+        const savedUser = localStorage.getItem('user');
+        return savedUser ? JSON.parse(savedUser) : null;
+    });
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
     useEffect(() => {
-        const savedUser = localStorage.getItem('user');
-        if (savedUser && token) {
-            setUser(JSON.parse(savedUser));
+        if (!user && token) {
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                setUser(JSON.parse(savedUser));
+            }
         }
-    }, [token]);
+    }, [token, user]);
 
     const login = (userData: User, authToken: string) => {
         setUser(userData);
