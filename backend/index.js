@@ -46,8 +46,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploaded files - using /api prefix for proxy compatibility
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Fallback for direct access
 
 // Diagnostic logging for all requests
 app.use((req, res, next) => {
@@ -1332,7 +1333,7 @@ app.get('/api/usuarios/:id/documentos', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM tb_documentos WHERE usuario_id = ? ORDER BY created_at DESC', [req.params.id]);
     // Map to frontend-expected shape: url (from arquivo_path) and data_upload (from created_at)
-    const BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? '' : `http://localhost:${process.env.PORT || 5001}`);
+    const BASE_URL = process.env.BASE_URL || '';
     const docs = rows.map(r => ({
       ...r,
       url: r.arquivo_path ? `${BASE_URL}${r.arquivo_path}` : null,
@@ -1361,7 +1362,7 @@ app.post('/api/usuarios/:id/documentos', authenticateToken, (req, res, next) => 
   const safeFilename = sanitizeFilename(req.file.originalname);
   try {
     const filePath = `/uploads/documentos/${req.file.filename}`;
-    const BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? '' : `http://localhost:${process.env.PORT || 5001}`);
+    const BASE_URL = process.env.BASE_URL || '';
     const [result] = await db.query(
       'INSERT INTO tb_documentos (usuario_id, descricao, arquivo_path, arquivo_nome, tipo_arquivo) VALUES (?, ?, ?, ?, ?)',
       [req.params.id, sanitizeString(descricao) || 'Documento', filePath, safeFilename, ext]

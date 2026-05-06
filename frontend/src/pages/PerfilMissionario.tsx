@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import api from '../api';
+import api, { getFileUrl } from '../api';
 import '../styles/PerfilMissionario.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -831,10 +831,10 @@ const PerfilMissionario: React.FC = () => {
                             </span>
                           </div>
                           <div className="doc-card-actions">
-                            <a href={doc.url} target="_blank" rel="noreferrer" className="doc-btn view" title="Visualizar">
+                            <a href={getFileUrl(doc.url) || '#'} target="_blank" rel="noreferrer" className="doc-btn view" title="Visualizar">
                               <Eye size={15} />
                             </a>
-                            <a href={doc.url} download={doc.arquivo_nome} className="doc-btn download" title="Download">
+                            <a href={getFileUrl(doc.url) || '#'} download={doc.arquivo_nome} className="doc-btn download" title="Download">
                               <Download size={15} />
                             </a>
                             {canEdit && (
@@ -935,7 +935,7 @@ const PerfilMissionario: React.FC = () => {
                           <label>Certidão de Óbito (PDF ou JPEG)</label>
                           <div className="file-input-wrapper">
                             <input type="file" onChange={e => uploadSituacaoDoc(e, 'certidao_obito_path')} disabled={!canEdit} />
-                            {situacaoData.certidao_obito_path && <a href={situacaoData.certidao_obito_path} target="_blank" rel="noreferrer" className="view-link"><Eye size={14} /> Ver Documento</a>}
+                            {situacaoData.certidao_obito_path && <a href={getFileUrl(situacaoData.certidao_obito_path) || '#'} target="_blank" rel="noreferrer" className="view-link"><Eye size={14} /> Ver Documento</a>}
                           </div>
                         </div>
                       </div>
@@ -949,27 +949,27 @@ const PerfilMissionario: React.FC = () => {
                         <div className="form-group">
                           <label>Incardinados (doc)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_incardinado_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_incardinado_path && <a href={situacaoData.egresso_incardinado_path} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.egresso_incardinado_path && <a href={getFileUrl(situacaoData.egresso_incardinado_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                         <div className="form-group">
                           <label>Desistência ou em outro instituto (doc)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_desistencia_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_desistencia_path && <a href={situacaoData.egresso_desistencia_path} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.egresso_desistencia_path && <a href={getFileUrl(situacaoData.egresso_desistencia_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                         <div className="form-group">
                           <label>Laicizados (doc)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_laicizado_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_laicizado_path && <a href={situacaoData.egresso_laicizado_path} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.egresso_laicizado_path && <a href={getFileUrl(situacaoData.egresso_laicizado_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                         <div className="form-group">
                           <label>Sacerdotes Transferidos - Para a Região (doc)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_transf_para_regiao_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_transf_para_regiao_path && <a href={situacaoData.egresso_transf_para_regiao_path} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.egresso_transf_para_regiao_path && <a href={getFileUrl(situacaoData.egresso_transf_para_regiao_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                         <div className="form-group">
                           <label>Sacerdotes Transferidos - Da Região para outras Províncias (doc)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_transf_da_regiao_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_transf_da_regiao_path && <a href={situacaoData.egresso_transf_da_regiao_path} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.egresso_transf_da_regiao_path && <a href={getFileUrl(situacaoData.egresso_transf_da_regiao_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                       </div>
                     </div>
@@ -983,7 +983,7 @@ const PerfilMissionario: React.FC = () => {
                         <div className="form-group">
                           <label>Processo (PDF)</label>
                           <input type="file" onChange={e => uploadSituacaoDoc(e, 'exclaustrado_processo')} disabled={!canEdit} />
-                          {situacaoData.exclaustrado_processo && <a href={situacaoData.exclaustrado_processo} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
+                          {situacaoData.exclaustrado_processo && <a href={getFileUrl(situacaoData.exclaustrado_processo) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
                         </div>
                       </div>
                     </div>
@@ -1039,7 +1039,7 @@ const PerfilMissionario: React.FC = () => {
                           }} disabled={!canEdit} />
                           <div className="itin-doc-actions">
                             {stage.doc_path ? (
-                              <a href={stage.doc_path} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
+                              <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
                             ) : (
                               <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
                                 <Plus size={14} /> Anexar
@@ -1073,7 +1073,7 @@ const PerfilMissionario: React.FC = () => {
                           }} disabled={!canEdit} />
                           <div className="itin-doc-actions">
                             {stage.doc_path ? (
-                              <a href={stage.doc_path} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
+                              <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
                             ) : (
                               <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
                                 <Plus size={14} /> Doc
@@ -1127,7 +1127,7 @@ const PerfilMissionario: React.FC = () => {
                         <div className="item-subtitle">{f.faculdade} • {f.periodo}</div>
                       </div>
                       <div className="item-actions-premium">
-                        {f.doc_path && <a href={f.doc_path} target="_blank" rel="noreferrer" className="btn-action-lite" title="Baixar Diploma"><Download size={14} /></a>}
+                        {f.doc_path && <a href={getFileUrl(f.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Baixar Diploma"><Download size={14} /></a>}
                         {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('formacao-academica', f.id)} title="Excluir"><Trash2 size={14} /></button>}
                       </div>
                     </div>
