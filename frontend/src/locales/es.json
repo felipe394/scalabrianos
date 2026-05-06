@@ -307,6 +307,35 @@
       "yes": "Sí",
       "no": "No",
       "retry": "Intentar nuevamente"
+    },
+    "planilha": {
+      "individual_title": "Detalle Mensual",
+      "comunidade_title": "Rendición de Cuentas MENSUAL - Comunidad",
+      "instruction_individual": "Complete los valores para cada categoría a continuación.",
+      "instruction_comunidade": "Completado por el ecónomo o superior local.",
+      "save_draft": "Guardar Borrador",
+      "save_comunidade": "Guardar Rendición",
+      "finalize_self": "Finalizar Mi Planilla",
+      "finalize_send": "Finalizar y Enviar al Ecónomo",
+      "status_validating": "Esperando Validación del Ecónomo/Superior",
+      "status_returned": "Planilla Devuelta para Revisión",
+      "status_validated": "Planilla Validada",
+      "receitas": "INGRESOS",
+      "despesas": "EGRESOS",
+      "total_receitas": "Total Ingresos",
+      "total_despesas": "Total Egresos",
+      "saldo_mes": "Saldo del Mes",
+      "excedente": "Excedente retenido (=30-40)",
+      "missas_individual": "S. Misas celebradas \"ad mentem Superioris\": n.º",
+      "superavit_deficit": "SUPERÁVIT / DÉFICIT",
+      "missas_comunidade": "Misas celebradas ad mentem Superioris n.º",
+      "attach_files": "Adjuntar recibos / notas (pdf/jpg)",
+      "replace_files": "Reemplazar Recibos",
+      "export_excel": "Exportar Excel",
+      "select_house": "Seleccione una casa religiosa.",
+      "consolidado_title": "Gestión de Cierre Mensual",
+      "consolidado_desc": "Aprobación general de la casa para el mes seleccionado.",
+      "reviewing": "Revisando"
     }
   }
 }

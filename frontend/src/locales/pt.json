@@ -308,6 +308,35 @@
       "yes": "Sim",
       "no": "Não",
       "retry": "Tentar novamente"
+    },
+    "planilha": {
+      "individual_title": "Detalhamento Mensal",
+      "comunidade_title": "Prestação de Contas MENSAL - Comunidade",
+      "instruction_individual": "Preencha os valores para cada categoria abaixo.",
+      "instruction_comunidade": "Preenchimento pelo ecônomo ou superior local.",
+      "save_draft": "Salvar Rascunho",
+      "save_comunidade": "Salvar Prestação",
+      "finalize_self": "Finalizar Minha Planilha",
+      "finalize_send": "Finalizar e Enviar para Ecônomo",
+      "status_validating": "Aguardando Validação do Ecônomo/Superior",
+      "status_returned": "Planilha Devolvida para Revisão",
+      "status_validated": "Planilha Validada",
+      "receitas": "RECEITAS",
+      "despesas": "DESPESAS",
+      "total_receitas": "Total Receitas",
+      "total_despesas": "Total Despesas",
+      "saldo_mes": "Saldo do Mês",
+      "excedente": "Excedente retido (=30-40)",
+      "missas_individual": "S. Missas celebradas \"ad mentem Superioris\": n.º",
+      "superavit_deficit": "SUPERÁVIT / DÉFICIT",
+      "missas_comunidade": "Missas celebradas ad mentem Superioris n.º",
+      "attach_files": "Anexar recibos / notas (pdf/jpg)",
+      "replace_files": "Substituir Recibos",
+      "export_excel": "Exportar Excel",
+      "select_house": "Selecione uma casa religiosa.",
+      "consolidado_title": "Gestão de Fechamento Mensal",
+      "consolidado_desc": "Aprovação geral da casa para o mês selecionado.",
+      "reviewing": "Revisando"
     }
   }
 }

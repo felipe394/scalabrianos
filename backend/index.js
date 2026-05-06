@@ -6,6 +6,7 @@ const db = require('./db');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const ExcelJS = require('exceljs');
 require('dotenv').config();
 
 // Multer configuration for document uploads
@@ -457,9 +458,27 @@ app.delete('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
 
 // Categories
 app.get('/api/categorias-financas', authenticateToken, async (req, res) => {
+  const { perfil } = req.query;
   try {
-    const [rows] = await db.query('SELECT * FROM tb_categorias_financas ORDER BY categoria_pai, nome');
-    res.json(rows);
+    let query = 'SELECT * FROM tb_categorias_financas WHERE 1=1';
+    const params = [];
+
+    if (perfil) {
+      query += ' AND perfil = ?';
+      params.push(perfil);
+    }
+
+    query += ' ORDER BY categoria_pai, codigo, nome';
+    const [rows] = await db.query(query, params);
+
+    // Hide codes for non-admins/non-RH
+    const canSeeCodes = ['ADMIN_GERAL', 'RH'].includes(req.user.role);
+    const sanitizedRows = rows.map(r => {
+      const { codigo, ...rest } = r;
+      return canSeeCodes ? r : rest;
+    });
+
+    res.json(sanitizedRows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -984,7 +1003,7 @@ app.get('/api/financas-mensais/usuario/:usuario_id/mes/:mes', authenticateToken,
 });
 
 app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
-  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito } = req.body;
+  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito, num_missas_superior, anexo_path } = req.body;
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -999,15 +1018,15 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
       }
       planilhaId = existing[0].id;
       await connection.query(
-        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [total_credito, total_debito, planilhaId]
+        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, num_missas_superior = ?, anexo_path = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [total_credito, total_debito, num_missas_superior || 0, anexo_path || null, planilhaId]
       );
       // Clean old items
       await connection.query('DELETE FROM tb_financas_mensais_itens WHERE planilha_id = ?', [planilhaId]);
     } else {
       const [result] = await connection.query(
-        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito) VALUES (?, ?, ?, ?, ?)',
-        [usuario_id, casa_id, mes_referencia, total_credito, total_debito]
+        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior || 0, anexo_path || null]
       );
       planilhaId = result.insertId;
     }

@@ -51,7 +51,7 @@ const GestaoFinanceira: React.FC = () => {
   const [selectedMissionarioId, setSelectedMissionarioId] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownOptions, setDropdownOptions] = useState<MissionarioOption[]>([]);
-  
+
   const [showDetails, setShowDetails] = useState<any>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [categorias, setCategorias] = useState<any[]>([]);
@@ -99,7 +99,7 @@ const GestaoFinanceira: React.FC = () => {
   useEffect(() => {
     const isCommon = !isAdminGeral && !isOconomo && !isSuperior;
     if (isCommon && user?.id) {
-       setFilteredMissionarios(missionarios.filter(m => m.usuario_id === user.id));
+      setFilteredMissionarios(missionarios.filter(m => m.usuario_id === user.id));
     } else if (selectedMissionarioId) {
       const target = allMissionarios.find(m => m.id === selectedMissionarioId);
       setFilteredMissionarios(
@@ -154,13 +154,13 @@ const GestaoFinanceira: React.FC = () => {
     setIsLoading(true);
     try {
       if (isCommon) {
-         // Common missionary history
-         const res = await api.get(`/financas-mensais/usuario/${user?.id}/historico`);
-         setMissionarios(res.data || []);
+        // Common missionary history
+        const res = await api.get(`/financas-mensais/usuario/${user?.id}/historico`);
+        setMissionarios(res.data || []);
       } else {
-         if (!selectedCasa) return;
-         const res = await api.get(`/financas-mensais/consolidado/casa/${selectedCasa}/mes/${selectedMes}`);
-         setMissionarios(res.data || []);
+        if (!selectedCasa) return;
+        const res = await api.get(`/financas-mensais/consolidado/casa/${selectedCasa}/mes/${selectedMes}`);
+        setMissionarios(res.data || []);
       }
     } catch (err) {
       console.error(err);
@@ -226,16 +226,16 @@ const GestaoFinanceira: React.FC = () => {
   const canValidate = isAdminGeral || isOconomo || isSuperior || (userRole === 'ADMINISTRADOR');
 
   const loadDetails = async (m: Missionario) => {
-     if (!m.id && !m.usuario_id) return;
-     setDetailsLoading(true);
-     try {
-       const res = await api.get(`/financas-mensais/usuario/${m.usuario_id}/mes/${m.mes_referencia}`);
-       setShowDetails(res.data);
-     } catch {
-       alert('Erro ao carregar detalhes');
-     } finally {
-       setDetailsLoading(false);
-     }
+    if (!m.id && !m.usuario_id) return;
+    setDetailsLoading(true);
+    try {
+      const res = await api.get(`/financas-mensais/usuario/${m.usuario_id}/mes/${m.mes_referencia}`);
+      setShowDetails(res.data);
+    } catch {
+      alert('Erro ao carregar detalhes');
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const exportToExcel = () => {
@@ -267,7 +267,7 @@ const GestaoFinanceira: React.FC = () => {
       <div className="page-header">
         <div className="title-with-badge">
           <BarChart3 size={24} />
-          <h2>Gestão Financeira</h2>
+          <h2>Registros Financeiros</h2>
         </div>
         <div className="header-actions">
           <button className="btn-export" onClick={exportToExcel} disabled={filteredMissionarios.length === 0}>
@@ -542,55 +542,55 @@ const GestaoFinanceira: React.FC = () => {
         <div className="modal-overlay" onClick={() => setShowDetails(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%' }}>
             <div className="modal-header">
-               <h3>Detalhes Financeiros - {showDetails.usuario_nome || 'Missionário'}</h3>
-               <button onClick={() => setShowDetails(null)} className="btn-close">✕</button>
+              <h3>Detalhes Financeiros - {showDetails.usuario_nome || 'Missionário'}</h3>
+              <button onClick={() => setShowDetails(null)} className="btn-close">✕</button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '20px' }}>
-               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                  <div>
-                    <h4 style={{ color: '#10b981', borderBottom: '1px solid #dcfce7', paddingBottom: '8px', marginBottom: '12px' }}>Créditos</h4>
-                    {categorias.filter(c => c.tipo === 'CREDITO').map(cat => {
-                       const item = showDetails.itens?.find((i:any) => i.categoria_id === cat.id);
-                       if (!item || parseFloat(item.valor) === 0) return null;
-                       return (
-                        <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
-                           <span>{cat.nome}</span>
-                           <span className="bold">R$ {parseFloat(item.valor).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                       );
-                    })}
-                    <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '2px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                       <strong>Total</strong>
-                       <strong style={{ color: '#10b981' }}>R$ {parseFloat(showDetails.total_credito).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-                    </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div>
+                  <h4 style={{ color: '#10b981', borderBottom: '1px solid #dcfce7', paddingBottom: '8px', marginBottom: '12px' }}>Créditos</h4>
+                  {categorias.filter(c => c.tipo === 'CREDITO').map(cat => {
+                    const item = showDetails.itens?.find((i: any) => i.categoria_id === cat.id);
+                    if (!item || parseFloat(item.valor) === 0) return null;
+                    return (
+                      <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
+                        <span>{cat.codigo && <b style={{ color: '#ef4444', marginRight: '8px' }}>{cat.codigo}</b>}{cat.nome}</span>
+                        <span className="bold">R$ {parseFloat(item.valor).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '2px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+                    <strong>Total</strong>
+                    <strong style={{ color: '#10b981' }}>R$ {parseFloat(showDetails.total_credito).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                   </div>
-                  <div>
-                    <h4 style={{ color: '#ef4444', borderBottom: '1px solid #fee2e2', paddingBottom: '8px', marginBottom: '12px' }}>Débitos</h4>
-                    {categorias.filter(c => c.tipo === 'DEBITO').map(cat => {
-                       const item = showDetails.itens?.find((i:any) => i.categoria_id === cat.id);
-                       if (!item || parseFloat(item.valor) === 0) return null;
-                       return (
-                        <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
-                           <span>{cat.nome}</span>
-                           <span className="bold">R$ {parseFloat(item.valor).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </div>
-                       );
-                    })}
-                    <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '2px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                       <strong>Total</strong>
-                       <strong style={{ color: '#ef4444' }}>R$ {parseFloat(showDetails.total_debito).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-                    </div>
+                </div>
+                <div>
+                  <h4 style={{ color: '#ef4444', borderBottom: '1px solid #fee2e2', paddingBottom: '8px', marginBottom: '12px' }}>Débitos</h4>
+                  {categorias.filter(c => c.tipo === 'DEBITO').map(cat => {
+                    const item = showDetails.itens?.find((i: any) => i.categoria_id === cat.id);
+                    if (!item || parseFloat(item.valor) === 0) return null;
+                    return (
+                      <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
+                        <span>{cat.codigo && <b style={{ color: '#ef4444', marginRight: '8px' }}>{cat.codigo}</b>}{cat.nome}</span>
+                        <span className="bold">R$ {parseFloat(item.valor).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '2px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+                    <strong>Total</strong>
+                    <strong style={{ color: '#ef4444' }}>R$ {parseFloat(showDetails.total_debito).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                   </div>
-               </div>
-               {showDetails.apontamentos && (
-                  <div style={{ marginTop: '20px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                     <strong>Observações:</strong>
-                     <p style={{ margin: '5px 0 0', fontSize: '14px' }}>{showDetails.apontamentos}</p>
-                  </div>
-               )}
+                </div>
+              </div>
+              {showDetails.apontamentos && (
+                <div style={{ marginTop: '20px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <strong>Observações:</strong>
+                  <p style={{ margin: '5px 0 0', fontSize: '14px' }}>{showDetails.apontamentos}</p>
+                </div>
+              )}
             </div>
             <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
-               <button className="btn-back" onClick={() => setShowDetails(null)}>Fechar</button>
+              <button className="btn-back" onClick={() => setShowDetails(null)}>Fechar</button>
             </div>
           </div>
         </div>
@@ -598,7 +598,7 @@ const GestaoFinanceira: React.FC = () => {
 
       {detailsLoading && (
         <div className="modal-overlay" style={{ background: 'rgba(255,255,255,0.7)' }}>
-           <Loader2 className="animate-spin" size={40} color="#013375" />
+          <Loader2 className="animate-spin" size={40} color="#013375" />
         </div>
       )}
     </div>

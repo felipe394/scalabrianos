@@ -1,0 +1,206 @@
+[
+  {
+    "id": 1,
+    "codigo": null,
+    "nome": "Aluguel",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 2,
+    "codigo": null,
+    "nome": "Energia Elétrica",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 3,
+    "codigo": null,
+    "nome": "Água",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 4,
+    "codigo": null,
+    "nome": "Internet",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 5,
+    "codigo": null,
+    "nome": "Supermercado",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 6,
+    "codigo": null,
+    "nome": "Saúde/Medicamentos",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 7,
+    "codigo": null,
+    "nome": "Vestuário",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 8,
+    "codigo": null,
+    "nome": "Transporte",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 9,
+    "codigo": "31.5",
+    "nome": "Doações",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 10,
+    "codigo": null,
+    "nome": "Congregação",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 11,
+    "codigo": "11.11",
+    "nome": "Saldo anterior",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 12,
+    "codigo": "11.11",
+    "nome": "Recebido pelo Superior/ecônomo",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 13,
+    "codigo": "31.1",
+    "nome": "Missas celebradas ad mentem offerentis",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 14,
+    "codigo": "31.2",
+    "nome": "Atividades de ministério",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 15,
+    "codigo": "31.3",
+    "nome": "Remuneração/côngruas",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 16,
+    "codigo": "31.4",
+    "nome": "Aposentadorias",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 17,
+    "codigo": "32.1",
+    "nome": "Reembolsos de atividades",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 18,
+    "codigo": "32.2",
+    "nome": "Reembolsos de viagens",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 19,
+    "codigo": "32.3",
+    "nome": "Reembolsos de seguro",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 20,
+    "codigo": "31.6",
+    "nome": "Várias",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 21,
+    "codigo": "41.2",
+    "nome": "Saúde (médico, remédios)",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 22,
+    "codigo": "41.4",
+    "nome": "Alimentação pessoal",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 23,
+    "codigo": "41.5",
+    "nome": "Material de higiene / limpeza",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 24,
+    "codigo": "41.6",
+    "nome": "Livros, formação (permanente/específica)",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 25,
+    "codigo": "41.7",
+    "nome": "Férias",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 26,
+    "codigo": "42.2",
+    "nome": "Reuniões, assembleias",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 27,
+    "codigo": "42.7",
+    "nome": "Documentos, vistos...",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 28,
+    "codigo": "42.15",
+    "nome": "Viagens (transporte, combustível, multas)",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 29,
+    "codigo": "42.13",
+    "nome": "Telefone, internet, correio...",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 30,
+    "codigo": "42.17",
+    "nome": "Equipamentos, móveis e utensílios",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 31,
+    "codigo": "44.1",
+    "nome": "Doações e caridade",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 32,
+    "codigo": "43.6",
+    "nome": "Taxas bancárias",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 33,
+    "codigo": "41.9",
+    "nome": "Outras despesas",
+    "perfil": "PERFIL_1"
+  },
+  {
+    "id": 34,
+    "codigo": "11.11",
+    "nome": "Entregue ao Superior/ecônomo",
+    "perfil": "PERFIL_1"
+  }
+]

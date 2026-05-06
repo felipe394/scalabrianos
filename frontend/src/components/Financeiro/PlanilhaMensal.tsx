@@ -5,13 +5,16 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../../api';
 
 interface Categoria {
   id: number;
+  codigo: string;
   nome: string;
   tipo: 'CREDITO' | 'DEBITO';
   categoria_pai: 'PESSOAL' | 'CASA';
+  perfil: 'PERFIL_1' | 'PERFIL_2' | 'ANUAL' | 'PLANEJAMENTO';
 }
 
 interface PlanilhaItem {
@@ -27,6 +30,8 @@ interface PlanilhaData {
   status: 'PENDENTE' | 'VALIDADO' | 'DEVOLVIDO';
   total_credito: number;
   total_debito: number;
+  num_missas_superior: number;
+  anexo_path: string | null;
   apontamentos: string;
   itens: PlanilhaItem[];
 }
@@ -54,7 +59,9 @@ interface ConsolidatedStatus {
 }
 
 const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
-  const { user } = useAuth();
+  const { t } = useTranslation();
+  const { user, isAdminGeral } = useAuth();
+  const blacklist = ['Congregação', 'Saúde/Medicamentos', 'Transporte', 'Vestuário', 'Água', 'Supermercado', 'Aluguel', 'Energia Elétrica', 'Internet'];
   const [selectedMes, setSelectedMes] = useState(new Date().toISOString().slice(0, 7));
   const [selectedCasa, setSelectedCasa] = useState('');
   const [planilha, setPlanilha] = useState<PlanilhaData | null>(null);
@@ -65,6 +72,10 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
   const [apontamentos, setApontamentos] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedUserName, setSelectedUserName] = useState('');
+  const [numMissas, setNumMissas] = useState(0);
+  const [anexoFile, setAnexoFile] = useState<File | null>(null);
+  const [anexoUrl, setAnexoUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Consolidated view state
   const [viewMode, setViewMode] = useState<'individual' | 'consolidado'>('individual');
@@ -105,7 +116,8 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
           vals[it.categoria_id] = parseFloat(it.valor);
         });
         setEditValues(vals);
-        setApontamentos(res.data.apontamentos || '');
+        setNumMissas(res.data.num_missas_superior || 0);
+        setAnexoUrl(res.data.anexo_path || null);
         if (res.data.casa_id) {
           setSelectedCasa(res.data.casa_id.toString());
         }
@@ -113,6 +125,8 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
         setPlanilha(null);
         setEditValues({});
         setApontamentos('');
+        setNumMissas(0);
+        setAnexoUrl(null);
       }
     } catch (err) {
       console.error('Erro ao carregar planilha:', err);
@@ -164,6 +178,27 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
       return;
     }
     setIsSaving(true);
+
+    let finalAnexoPath = anexoUrl;
+
+    // 1. Upload file if exists
+    if (anexoFile) {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('arquivo', anexoFile);
+      formData.append('descricao', `Recibo ${selectedMes} - ${user.nome}`);
+      try {
+        const upRes = await api.post(`/usuarios/${user.id}/documentos`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        finalAnexoPath = upRes.data.arquivo_path;
+      } catch (err) {
+        alert('Erro ao enviar anexo. A planilha será salva sem o anexo.');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
     const totals = calculateTotals();
     const payload = {
       usuario_id: user.id,
@@ -171,7 +206,9 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
       mes_referencia: selectedMes,
       total_credito: totals.credito,
       total_debito: totals.debito,
-      status: 'PENDENTE', // Returns to pending if saved again
+      num_missas_superior: numMissas,
+      anexo_path: finalAnexoPath,
+      status: 'PENDENTE',
       itens: Object.entries(editValues).map(([id, val]) => ({
         categoria_id: parseInt(id),
         valor: val
@@ -180,10 +217,52 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
 
     try {
       await api.post('/financas-mensais', payload);
-      alert('Planilha salva com sucesso!');
+      alert('Planilha salva como rascunho!');
       loadPlanilha();
     } catch (err: any) {
       alert('Erro ao salvar: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!user || !selectedCasa) {
+      alert('Selecione uma casa religiosa.');
+      return;
+    }
+
+    const isSuperiorSelf = isSuperior && (!selectedUserId || selectedUserId === user.id);
+    const confirmMsg = isSuperiorSelf 
+      ? 'Deseja finalizar sua planilha? Ela será considerada validada automaticamente.' 
+      : 'Deseja finalizar e enviar esta planilha para o ecônomo? Após enviar, você não poderá mais editá-la.';
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+    setIsSaving(true);
+    const totals = calculateTotals();
+    const payload = {
+      usuario_id: user.id,
+      casa_id: parseInt(selectedCasa),
+      mes_referencia: selectedMes,
+      total_credito: totals.credito,
+      total_debito: totals.debito,
+      num_missas_superior: numMissas,
+      anexo_path: anexoUrl,
+      status: isSuperiorSelf ? 'VALIDADO' : 'EM_VALIDACAO',
+      itens: Object.entries(editValues).map(([id, val]) => ({
+        categoria_id: parseInt(id),
+        valor: val
+      }))
+    };
+
+    try {
+      await api.post('/financas-mensais', payload);
+      alert(isSuperiorSelf ? 'Sua planilha foi finalizada e validada!' : 'Planilha enviada para validação com sucesso!');
+      loadPlanilha();
+    } catch (err: any) {
+      alert('Erro ao enviar: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsSaving(false);
     }
@@ -243,45 +322,101 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
     XLSX.writeFile(wb, `Consolidado_${casaNome}_${selectedMes}.xlsx`);
   };
 
+  const exportIndividualToExcel = () => {
+    if (!user || !planilha) return;
+
+    const casaNome = casas.find(c => String(c.id) === selectedCasa)?.nome || 'Casa';
+    const userName = selectedUserName || user.nome;
+
+    // Build the sheet data
+    const rows: any[] = [];
+    rows.push(['RELATÓRIO FINANCEIRO INDIVIDUAL']);
+    rows.push([`Missionário: ${userName}`]);
+    rows.push([`Casa: ${casaNome}`]);
+    rows.push([`Mês: ${selectedMes}`]);
+    rows.push([]);
+
+    // Headers
+    rows.push(['CÓDIGO', 'CATEGORIA', 'RECEITA (R$)', '', 'CÓDIGO', 'CATEGORIA', 'DESPESA (R$)']);
+
+    const receitas = categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_1');
+    const despesas = categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_1');
+    const maxLength = Math.max(receitas.length, despesas.length + 2); // +2 for totals/missas
+
+    for (let i = 0; i < maxLength; i++) {
+      const rec = receitas[i];
+      const dep = despesas[i];
+      
+      const row = [
+        rec ? String(rec.codigo || '') : '',
+        rec ? String(rec.nome || '') : '',
+        rec ? (editValues[rec.id] || 0) : '',
+        '',
+        dep ? String(dep.codigo || '') : '',
+        dep ? String(dep.nome || '') : '',
+        dep ? (editValues[dep.id] || 0) : ''
+      ];
+
+      // Add extra rows for totals/missas at the end of despesas column
+      if (i === despesas.length) {
+        row[4] = '50';
+        row[5] = 'EXCEDENTE RETIDO';
+        row[6] = totals.saldo;
+      } else if (i === despesas.length + 1) {
+        row[4] = '70';
+        row[5] = 'MISSAS CELEBRADAS';
+        row[6] = numMissas;
+      }
+
+      rows.push(row);
+    }
+
+    rows.push([]);
+    rows.push(['', 'TOTAL RECEITAS:', totals.credito, '', '', 'TOTAL DESPESAS:', totals.debito]);
+    rows.push(['', '', '', '', '', 'SALDO:', totals.saldo]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 10 }, { wch: 30 }, { wch: 15 }, { wch: 5 }, { wch: 10 }, { wch: 30 }, { wch: 15 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
+    XLSX.writeFile(wb, `Financeiro_${userName.replace(' ', '_')}_${selectedMes}.xlsx`);
+  };
+
   return (
     <div className="planilha-mensal-content">
       <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
         <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           <div className="filter-item">
-            <label><Calendar size={14} /> Mês de Referência</label>
+            <label><Calendar size={14} /> {t('financeiro.filters.start_date')}</label>
             <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
           </div>
           <div className="filter-item">
             <label>Casa Religiosa</label>
             <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)} disabled={!!planilha}>
-              <option value="">Selecione...</option>
+              <option value="">{t('common.loading')}</option>
               {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
-          <div className="filter-item">
-            <label>Status</label>
-            {viewMode === 'individual' ? (
-              planilha ? (
-                <span className={`status-tag ${planilha.status.toLowerCase()}`} style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', gap: '6px', width: '100%' }}>
-                  {planilha.status === 'VALIDADO' ? <CheckCircle size={14} /> : (planilha.status === 'DEVOLVIDO' ? <AlertCircle size={14} /> : <Loader2 size={14} className="animate-spin" />)}
-                  {planilha.status === 'DEVOLVIDO' ? 'DEVOLVIDO PARA REVISÃO' : planilha.status}
-                </span>
-              ) : (
-                <span className="status-tag inativo" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', width: '100%' }}>NÃO INICIADO</span>
-              )
-            ) : (
+          {isAdminGeral && (
+            <div className="filter-item">
+              <label>Ações</label>
               <button className="btn-export-small" onClick={exportConsolidadoToExcel} disabled={consolidadoData.length === 0} style={{ height: '40px', width: '100%', justifyContent: 'center' }}>
-                <Download size={14} /> Exportar Excel
+                <Download size={14} /> {t('financeiro.actions.export')}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {(canValidate || isSuperior) && selectedUserId && (
         <div className="view-mode-tabs">
           <button className="mode-btn active" style={{ marginLeft: 'auto' }}>
-            Revisando: {selectedUserName}
+            {t('planilha.reviewing')}: {selectedUserName}
           </button>
         </div>
       )}
@@ -291,8 +426,8 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
           <div className="consolidado-approval-card card-lite" style={{ marginBottom: '20px', borderTop: '4px solid #6366f1' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: 0 }}>Gestão de Fechamento Mensal</h3>
-                <p style={{ margin: '5px 0 0', opacity: 0.7 }}>Aprovação geral da casa para o mês selecionado.</p>
+                <h3 style={{ margin: 0 }}>{t('planilha.consolidado_title')}</h3>
+                <p style={{ margin: '5px 0 0', opacity: 0.7 }}>{t('planilha.consolidado_desc')}</p>
               </div>
               <span className={`status-tag ${(consolidadoStatus?.status || '').toLowerCase()}`}>
                 {consolidadoStatus?.status?.replace('_', ' ') || 'PENDENTE ECONOMO'}
@@ -393,24 +528,52 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
           <div className="spreedsheet-container card-lite">
             <div className="spreedsheet-header">
               <div className="header-info">
-                <h3>Detalhamento Mensal</h3>
-                <p>Preencha os valores para cada categoria abaixo.</p>
+                <h3>{t('planilha.individual_title')}</h3>
+                <p>{t('planilha.instruction_individual')}</p>
               </div>
-              {(!planilha || planilha.status === 'PENDENTE' || planilha.status === 'DEVOLVIDO') && (
-                <button className="btn-save" onClick={handleSave} disabled={isSaving}>
-                  {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  {planilha?.status === 'DEVOLVIDO' ? 'Reenviar Planilha Corrigida' : 'Salvar Planilha'}
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {planilha && (
+                  <button className="btn-export-small" onClick={exportIndividualToExcel} style={{ background: '#10b981', color: 'white' }}>
+                    <Download size={18} /> {t('financeiro.actions.export')}
+                  </button>
+                )}
+                {(!planilha || planilha.status === 'PENDENTE' || planilha.status === 'DEVOLVIDO') && (
+                    <button className="btn-save" onClick={handleSave} disabled={isSaving} style={{ background: '#64748b', height: '42px', padding: '0 20px' }}>
+                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                      {t('planilha.save_draft')}
+                    </button>
+                )}
+                {planilha?.status === 'EM_VALIDACAO' && (
+                  <div className="status-tag em_validacao" style={{ padding: '10px 20px', fontSize: '14px' }}>
+                     <Loader2 className="animate-spin" size={18} style={{ marginRight: '10px' }} />
+                     {t('planilha.status_validating')}
+                  </div>
+                )}
+                {planilha?.status === 'DEVOLVIDO' && (
+                  <div className="status-tag devolvido" style={{ padding: '10px 20px', fontSize: '14px' }}>
+                     <AlertCircle size={18} style={{ marginRight: '10px' }} />
+                     {t('planilha.status_returned')}
+                  </div>
+                )}
+                {planilha?.status === 'VALIDADO' && (
+                  <div className="status-tag validado" style={{ padding: '10px 20px', fontSize: '14px' }}>
+                     <CheckCircle size={18} style={{ marginRight: '10px' }} />
+                     {t('planilha.status_validated')}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="spreadsheet-grid">
               {/* CRÉDITOS */}
               <div className="spreadsheet-column">
-                <h4 className="column-title credito"><TrendingUp size={16} /> Créditos (Entradas)</h4>
-                {categorias.filter(c => c.tipo === 'CREDITO').map(cat => (
+                <h4 className="column-title credito" style={{ background: '#dcfce7', color: '#166534' }}><TrendingUp size={16} /> {t('planilha.receitas')}</h4>
+                {categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_1' && !blacklist.includes(c.nome)).map(cat => (
                   <div key={cat.id} className="spreadsheet-row">
-                    <label>{cat.nome}</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      {cat.codigo && <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: 700, width: '35px' }}>{cat.codigo}</span>}
+                      <label>{cat.nome}</label>
+                    </div>
                     <div className="input-money">
                       <span>R$</span>
                       <input
@@ -424,35 +587,20 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
                   </div>
                 ))}
                 <div className="column-footer">
-                  <span>Total Créditos</span>
+                  <span>{t('planilha.total_receitas')}</span>
                   <strong>R$ {totals.credito.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                 </div>
               </div>
 
               {/* DÉBITOS */}
               <div className="spreadsheet-column">
-                <h4 className="column-title debito"><TrendingDown size={16} /> Débitos (Saídas)</h4>
-                <div className="category-group-label">Despesas da Casa</div>
-                {categorias.filter(c => c.tipo === 'DEBITO' && c.categoria_pai === 'CASA').map(cat => (
+                <h4 className="column-title debito" style={{ background: '#ffedd5', color: '#9a3412' }}><TrendingDown size={16} /> {t('planilha.despesas')}</h4>
+                {categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_1' && !blacklist.includes(c.nome)).map(cat => (
                   <div key={cat.id} className="spreadsheet-row">
-                    <label>{cat.nome}</label>
-                    <div className="input-money">
-                      <span>R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editValues[cat.id] || ''}
-                        onChange={e => setEditValues({ ...editValues, [cat.id]: parseFloat(e.target.value) || 0 })}
-                        disabled={planilha?.status === 'VALIDADO'}
-                      />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      {cat.codigo && <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: 700, width: '35px' }}>{cat.codigo}</span>}
+                      <label>{cat.nome}</label>
                     </div>
-                  </div>
-                ))}
-
-                <div className="category-group-label" style={{ marginTop: '15px' }}>Despesas Pessoais</div>
-                {categorias.filter(c => c.tipo === 'DEBITO' && c.categoria_pai === 'PESSOAL').map(cat => (
-                  <div key={cat.id} className="spreadsheet-row">
-                    <label>{cat.nome}</label>
                     <div className="input-money">
                       <span>R$</span>
                       <input
@@ -467,10 +615,63 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
                 ))}
 
                 <div className="column-footer">
-                  <span>Total Débitos</span>
+                  <span>{t('planilha.total_despesas')}</span>
                   <strong>R$ {totals.debito.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                 </div>
+
+                <div className="spreadsheet-row" style={{ marginTop: '10px' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      {isAdminGeral && <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: 700, width: '35px' }}>50</span>}
+                      <label style={{ fontWeight: 700 }}>{t('planilha.excedente')}</label>
+                   </div>
+                   <div className="input-money">
+                      <span>R$</span>
+                      <input type="text" value={totals.saldo.toLocaleString(undefined, { minimumFractionDigits: 2 })} disabled style={{ background: '#f8fafc' }} />
+                   </div>
+                </div>
+
+                <div className="spreadsheet-row" style={{ marginTop: '5px' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      {isAdminGeral && <span style={{ color: '#ef4444', fontSize: '11px', fontWeight: 700, width: '35px' }}>70</span>}
+                      <label style={{ fontWeight: 600 }}>{t('planilha.missas_individual')}</label>
+                   </div>
+                   <div className="input-money" style={{ border: 'none' }}>
+                      <input 
+                        type="number" 
+                        value={numMissas} 
+                        onChange={e => setNumMissas(parseInt(e.target.value) || 0)} 
+                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', textAlign: 'right', background: 'white' }}
+                        disabled={planilha?.status === 'VALIDADO'}
+                      />
+                   </div>
+                </div>
               </div>
+            </div>
+
+            <div className="spreadsheet-summary" style={{ marginTop: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="file"
+                    id="anexo-input"
+                    style={{ display: 'none' }}
+                    onChange={e => setAnexoFile(e.target.files?.[0] || null)}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                  />
+                  <label htmlFor="anexo-input" className="btn-save" style={{ cursor: 'pointer', background: '#013375', color: 'white', border: 'none', height: '38px', padding: '0 20px', margin: 0 }}>
+                    <FileText size={16} /> {anexoFile ? anexoFile.name : (anexoUrl ? t('planilha.replace_files') : t('planilha.attach_files'))}
+                  </label>
+                  {anexoUrl && (
+                    <a href={`${api.defaults.baseURL}${anexoUrl}`} target="_blank" rel="noreferrer" className="btn-icon-view" title="Ver Anexo">
+                       <FileText size={20} />
+                    </a>
+                  )}
+                </div>
+
+                {(!planilha || planilha.status === 'PENDENTE' || planilha.status === 'DEVOLVIDO') && (
+                  <button className="btn-save" onClick={handleFinalize} disabled={isSaving} style={{ background: '#013375', height: '42px', padding: '0 30px' }}>
+                    <CheckCircle size={18} /> {isSuperior && (!selectedUserId || selectedUserId === user?.id) ? t('planilha.finalize_self') : t('planilha.finalize_send')}
+                  </button>
+                )}
             </div>
 
             {(canValidate || isSuperior) && viewMode === 'individual' && planilha && (
@@ -513,7 +714,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
             )}
 
             <div className="spreadsheet-summary" style={{ marginTop: '30px', padding: '20px', background: '#f1f5f9', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label>Saldo do Mês</label>
+              <label>{t('planilha.saldo_mes')}</label>
               <h2 style={{ color: totals.saldo >= 0 ? '#10b981' : '#ef4444' }}>
                 R$ {totals.saldo.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </h2>
