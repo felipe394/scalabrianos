@@ -154,6 +154,25 @@ function calcDuracao(dataInicio: string): string {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+const ITIN_STAGES = [
+  '4.1 Seminário (geral)',
+  '4.1.1 Seminário Menor',
+  '4.1.2 Propedêutico',
+  '4.1.3 Filosofia',
+  '4.1.4 Postulado',
+  '4.1.5 Noviciado',
+  '4.1.6 Teologia',
+  '4.1.7 Tirocínio',
+  '4.2.1 Primeira Profissão',
+  'Renovação de Votos',
+  '4.2.2 Profissão Perpetúa',
+  '4.2.3 Diaconato',
+  '4.2.4 Presbiterato',
+  '4.3.1 Leitorato',
+  '4.3.2 Acolitato',
+  '4.3.3 Ministro de Eucaristia'
+];
+
 const Missionarios: React.FC = () => {
   const { canEdit } = useAuth();
   const { t } = useTranslation();
@@ -192,6 +211,15 @@ const Missionarios: React.FC = () => {
   const [casasVinculos, setCasasVinculos] = useState<CasaVinculo[]>([]);
   const [novaCasa, setNovaCasa] = useState<CasaVinculo>({ casa_id: '', data_inicio: new Date().toISOString().split('T')[0], is_superior: false });
 
+  // Extra file refs for wizard steps
+  const formacaoFileRef = useRef<HTMLInputElement>(null);
+  const [formacaoDocFile, setFormacaoDocFile] = useState<File | null>(null);
+  const saudeFileRef = useRef<HTMLInputElement>(null);
+  const [saudeDocFile, setSaudeDocFile] = useState<File | null>(null);
+  const itinStepFileRef = useRef<HTMLInputElement>(null);
+  const [itineraryDocs, setItineraryDocs] = useState<{ file: File, stage: string }[]>([]);
+  const [itinSelectedStage, setItinSelectedStage] = useState('');
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [situacaoFilter, setSituacaoFilter] = useState('');
@@ -217,6 +245,10 @@ const Missionarios: React.FC = () => {
   const openWizard = () => {
     setWizardData(initialWizard);
     setDocs([]);
+    setFormacaoDocFile(null);
+    setSaudeDocFile(null);
+    setItineraryDocs([]);
+    setItinSelectedStage('');
     setCasasVinculos([]);
     setNovaCasa({ casa_id: '', data_inicio: new Date().toISOString().split('T')[0], is_superior: false });
     setPendingDocDescricao('');
@@ -396,11 +428,42 @@ const Missionarios: React.FC = () => {
       }
 
       // 7 — Documentos (uploaded after user creation)
+      // Standard docs from step 1
       for (const doc of docs) {
         if (!doc.file) continue;
         const fd = new FormData();
         fd.append('arquivo', doc.file);
         fd.append('descricao', doc.descricao);
+        await api.post(`${API_URL}/usuarios/${newId}/documentos`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      // Step 4 Doc (Formação)
+      if (formacaoDocFile) {
+        const fd = new FormData();
+        fd.append('arquivo', formacaoDocFile);
+        fd.append('descricao', 'Comprovante de Formação');
+        await api.post(`${API_URL}/usuarios/${newId}/documentos`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      // Step 5 Doc (Saúde)
+      if (saudeDocFile) {
+        const fd = new FormData();
+        fd.append('arquivo', saudeDocFile);
+        fd.append('descricao', 'Documento de Saúde');
+        await api.post(`${API_URL}/usuarios/${newId}/documentos`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
+
+      // Itinerário Step Docs
+      for (const idoc of itineraryDocs) {
+        const fd = new FormData();
+        fd.append('arquivo', idoc.file);
+        fd.append('descricao', `Itinerário - ${idoc.stage}`);
         await api.post(`${API_URL}/usuarios/${newId}/documentos`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
@@ -477,8 +540,8 @@ const Missionarios: React.FC = () => {
                   <td>{m.login}</td>
                   <td className="center"><span className={`status-tag ${m.is_oconomo ? 'ativo' : 'inativo'}`}>{m.is_oconomo ? t('common.yes') : t('common.no')}</span></td>
                   <td className="center"><span className={`status-tag ${m.is_superior ? 'ativo' : 'inativo'}`}>{m.is_superior ? t('common.yes') : t('common.no')}</span></td>
-                  <td className="center"><span className={`status-tag ${m.status.toLowerCase()}`}>{m.status}</span></td>
-                  <td className="center"><span className={`situacao-tag ${m.situacao.toLowerCase()}`}>{m.situacao}</span></td>
+                  <td className="center"><span className={`status-tag ${(m.status || '').toLowerCase()}`}>{m.status}</span></td>
+                  <td className="center"><span className={`situacao-tag ${(m.situacao || '').toLowerCase()}`}>{m.situacao}</span></td>
                   <td className="center">
                     <button className="btn-action-lite" title={t('missionaries.table.view_details')} onClick={() => navigate(`/missionarios/${m.id}`)}>
                       <Eye size={18} />
@@ -743,55 +806,180 @@ const Missionarios: React.FC = () => {
               {/* ══ STEP Itinerário ══ */}
               {wizardStep === 3 && (
                 <div className="wizard-step-content">
-                  <div className="wizard-divider">Itinerário Formativo</div>
+                  <div className="wizard-divider">4.1 Seminário — Formativo</div>
                   <p className="wizard-hint">Preencha os dados das etapas de formação do missionário.</p>
-                  
-                  <div className="itinerary-wizard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                     {[
-                      { label: '4.1 Seminário', etapa: 'SEMINARIO', isSub: false },
+                      { label: '4.1 Seminário (geral)', etapa: 'SEMINARIO', isSub: false },
                       { label: '4.1.1 Seminário Menor', etapa: 'SEMINARIO', isSub: true },
                       { label: '4.1.2 Propedêutico', etapa: 'PROPEDEUTICO', isSub: true },
                       { label: '4.1.3 Filosofia', etapa: 'FILOSOFIA', isSub: true },
-                      { label: '4.1.4 Postulado', etapa: 'POSTULADO', isSub: true }
+                      { label: '4.1.4 Postulado', etapa: 'POSTULADO', isSub: true },
+                      { label: '4.1.5 Noviciado', etapa: 'NOVICIADO', isSub: true },
+                      { label: '4.1.6 Teologia', etapa: 'TEOLOGIA', isSub: true },
+                      { label: '4.1.7 Tirocínio', etapa: 'TIROCINIMO', isSub: true },
                     ].map((seg, idx) => {
-                       const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub) || { etapa: seg.etapa, is_sub_etapa: seg.isSub, local: '', periodo: '' };
-                       return (
-                         <div key={idx} className="itin-wz-card" style={{ padding: '12px', border: '1px solid #eee', borderRadius: '8px', background: '#fcfcfc' }}>
-                           <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '8px' }}>{seg.label}</div>
-                           <div style={{ display: 'flex', gap: '10px' }}>
-                             <div className="form-group" style={{ flex: 1 }}>
-                               <label style={{ fontSize: '0.75rem' }}>Local</label>
-                               <input 
-                                 type="text" 
-                                 value={stage.local} 
-                                 onChange={e => {
-                                   const newItin = [...wizardData.itinerario];
-                                   const targetIdx = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
-                                   if (targetIdx > -1) newItin[targetIdx].local = e.target.value;
-                                   set('itinerario', newItin);
-                                 }}
-                                 placeholder="Local da formação..."
-                               />
-                             </div>
-                             <div className="form-group" style={{ flex: 1 }}>
-                               <label style={{ fontSize: '0.75rem' }}>Período</label>
-                               <input 
-                                 type="text" 
-                                 value={stage.periodo} 
-                                 onChange={e => {
-                                   const newItin = [...wizardData.itinerario];
-                                   const targetIdx = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
-                                   if (targetIdx > -1) newItin[targetIdx].periodo = e.target.value;
-                                   set('itinerario', newItin);
-                                 }}
-                                 placeholder="Ex: 2020-2022"
-                               />
-                             </div>
-                           </div>
-                         </div>
-                       );
+                      const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub) || { etapa: seg.etapa, is_sub_etapa: seg.isSub, local: '', periodo: '' };
+                      const updateStage = (field: 'local' | 'periodo', val: string) => {
+                        const newItin = [...wizardData.itinerario];
+                        let ti = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
+                        if (ti > -1) { 
+                          newItin[ti] = { ...newItin[ti], [field]: val }; 
+                        } else { 
+                          newItin.push({ ...stage, [field]: val }); 
+                        }
+                        set('itinerario', newItin);
+                      };
+                      return (
+                        <div key={idx} style={{ padding: '12px', border: '1px solid #e8f0fb', borderRadius: '10px', background: '#f9fbff', borderLeft: '3px solid #4a90e2' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '8px' }}>{seg.label}</div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Local</label>
+                              <input type="text" value={stage.local} onChange={e => updateStage('local', e.target.value)} placeholder="Local..." />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Período</label>
+                              <input type="text" value={stage.periodo} onChange={e => updateStage('periodo', e.target.value)} placeholder="Ex: 2020-2022" />
+                            </div>
+                          </div>
+                        </div>
+                      );
                     })}
                   </div>
+
+                  <div className="wizard-divider" style={{ marginTop: '8px' }}>4.2 Vida Religiosa</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    {[
+                      { label: '4.2.1 Primeira Profissão', etapa: 'PRIMEIRA_PROFISSAO', isSub: true },
+                      { label: 'Renovação de Votos', etapa: 'RENOVACAO_VOTOS', isSub: true },
+                      { label: '4.2.2 Profissão Perpetúa', etapa: 'PROFISSAO_PERPETUA', isSub: true },
+                      { label: '4.2.3 Diaconato', etapa: 'DIACONATO', isSub: true },
+                      { label: '4.2.4 Presbiterato', etapa: 'PRESBITERATO', isSub: true },
+                    ].map((seg, idx) => {
+                      const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub) || { etapa: seg.etapa, is_sub_etapa: seg.isSub, local: '', periodo: '' };
+                      const updateStage = (field: 'local' | 'periodo', val: string) => {
+                        const newItin = [...wizardData.itinerario];
+                        let ti = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
+                        if (ti > -1) { 
+                          newItin[ti] = { ...newItin[ti], [field]: val }; 
+                        } else { 
+                          newItin.push({ ...stage, [field]: val }); 
+                        }
+                        set('itinerario', newItin);
+                      };
+                      return (
+                        <div key={idx} style={{ padding: '12px', border: '1px solid #e8f5e9', borderRadius: '10px', background: '#f9fff9', borderLeft: '3px solid #4caf50' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#2e7d32', marginBottom: '8px' }}>{seg.label}</div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Local</label>
+                              <input type="text" value={stage.local} onChange={e => updateStage('local', e.target.value)} placeholder="Local..." />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Período</label>
+                              <input type="text" value={stage.periodo} onChange={e => updateStage('periodo', e.target.value)} placeholder="Ex: 2020-2022" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="wizard-divider" style={{ marginTop: '8px' }}>4.3 Ministérios</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    {[
+                      { label: '4.3.1 Leitorato', etapa: 'LEITORATO', isSub: true },
+                      { label: '4.3.2 Acolitato', etapa: 'ACOLITATO', isSub: true },
+                      { label: '4.3.3 Ministro de Eucalistia', etapa: 'MINISTRO_EUCARISTIA', isSub: true },
+                    ].map((seg, idx) => {
+                      const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub) || { etapa: seg.etapa, is_sub_etapa: seg.isSub, local: '', periodo: '' };
+                      const updateStage = (field: 'local' | 'periodo', val: string) => {
+                        const newItin = [...wizardData.itinerario];
+                        let ti = newItin.findIndex(s => s.etapa === seg.etapa && s.is_sub_etapa === seg.isSub);
+                        if (ti > -1) { 
+                          newItin[ti] = { ...newItin[ti], [field]: val }; 
+                        } else { 
+                          newItin.push({ ...stage, [field]: val }); 
+                        }
+                        set('itinerario', newItin);
+                      };
+                      return (
+                        <div key={idx} style={{ padding: '12px', border: '1px solid #fff3e0', borderRadius: '10px', background: '#fffdf9', borderLeft: '3px solid #ff9800' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#e65100', marginBottom: '8px' }}>{seg.label}</div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Local</label>
+                              <input type="text" value={stage.local} onChange={e => updateStage('local', e.target.value)} placeholder="Local..." />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label style={{ fontSize: '0.72rem' }}>Período</label>
+                              <input type="text" value={stage.periodo} onChange={e => updateStage('periodo', e.target.value)} placeholder="Ex: 2020-2022" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="wizard-divider" style={{ marginTop: '16px' }}>Documentos do Itinerário (opcional)</div>
+                  
+                  <div className="form-row-2" style={{ alignItems: 'flex-end', gap: '10px' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label>Selecione a Etapa</label>
+                      <select 
+                        value={itinSelectedStage} 
+                        onChange={e => setItinSelectedStage(e.target.value)}
+                        style={{ width: '100%' }}
+                      >
+                        <option value="">-- Escolha uma etapa --</option>
+                        {ITIN_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <button 
+                        className="btn-add-doc" 
+                        onClick={() => itinStepFileRef.current?.click()}
+                        disabled={!itinSelectedStage}
+                        style={{ height: '42px', opacity: itinSelectedStage ? 1 : 0.6 }}
+                      >
+                        <Plus size={16} /> Anexar Arquivo
+                      </button>
+                      <input
+                        ref={itinStepFileRef}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        style={{ display: 'none' }}
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file && itinSelectedStage) {
+                            setItineraryDocs(prev => [...prev, { file, stage: itinSelectedStage }]);
+                            setItinSelectedStage(''); // reset selector
+                            if (itinStepFileRef.current) itinStepFileRef.current.value = '';
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {itineraryDocs.length > 0 && (
+                    <div style={{ marginTop: '10px', background: '#f8f9fa', padding: '10px', borderRadius: '8px' }}>
+                      <p style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px', color: '#666' }}>Arquivos Selecionados:</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {itineraryDocs.map((d, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '6px 10px', borderRadius: '6px', border: '1px solid #eee' }}>
+                            <div style={{ fontSize: '13px' }}>
+                              <strong style={{ color: 'var(--primary)' }}>{d.stage}:</strong> <span style={{ color: '#666' }}>{d.file.name}</span>
+                            </div>
+                            <button 
+                              onClick={() => setItineraryDocs(prev => prev.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer', fontSize: '16px' }}
+                            >✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -813,7 +1001,27 @@ const Missionarios: React.FC = () => {
                       <input type="text" value={wizardData.formacao_periodo} onChange={e => set('formacao_periodo', e.target.value)} placeholder="Ex: 2018-2022" />
                     </div>
                   </div>
-                  <p className="wizard-hint" style={{ marginTop: '10px' }}>
+
+                  <div className="wizard-divider" style={{ marginTop: '8px' }}>Documento Comprobatório (opcional)</div>
+                  <div className="doc-add-row">
+                    <span style={{ fontSize: '13px', color: '#666', alignSelf: 'center' }}>
+                      {formacaoDocFile ? formacaoDocFile.name : 'Nenhum arquivo selecionado'}
+                    </span>
+                    <button className="btn-add-doc" onClick={() => formacaoFileRef.current?.click()}>
+                      <Plus size={16} /> Anexar PDF / Imagem
+                    </button>
+                    <input
+                      ref={formacaoFileRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      style={{ display: 'none' }}
+                      onChange={e => setFormacaoDocFile(e.target.files?.[0] || null)}
+                    />
+                    {formacaoDocFile && (
+                      <button onClick={() => setFormacaoDocFile(null)} style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer', fontSize: '18px' }} title="Remover">✕</button>
+                    )}
+                  </div>
+                  <p className="wizard-hint" style={{ marginTop: '4px' }}>
                     Outras atividades e obras realizadas podem ser adicionadas no perfil após o cadastro.
                   </p>
                 </div>
@@ -829,12 +1037,32 @@ const Missionarios: React.FC = () => {
                     <div className="form-group"><label>Term. Carteira</label><input type="text" value={wizardData.saude_carteira} onChange={e => set('saude_carteira', e.target.value)} /></div>
                   </div>
 
-                  <div className="wizard-divider" style={{ marginTop: '20px' }}><DollarSign size={14} /> Dados Financeiros & NIT</div>
+                  <div className="wizard-divider" style={{ marginTop: '6px' }}>Documento de Saúde (opcional)</div>
+                  <div className="doc-add-row">
+                    <span style={{ fontSize: '13px', color: '#666', alignSelf: 'center' }}>
+                      {saudeDocFile ? saudeDocFile.name : 'Nenhum arquivo selecionado'}
+                    </span>
+                    <button className="btn-add-doc" onClick={() => saudeFileRef.current?.click()}>
+                      <Plus size={16} /> Anexar PDF / Imagem
+                    </button>
+                    <input
+                      ref={saudeFileRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      style={{ display: 'none' }}
+                      onChange={e => setSaudeDocFile(e.target.files?.[0] || null)}
+                    />
+                    {saudeDocFile && (
+                      <button onClick={() => setSaudeDocFile(null)} style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer', fontSize: '18px' }} title="Remover">✕</button>
+                    )}
+                  </div>
+
+                  <div className="wizard-divider" style={{ marginTop: '16px' }}><DollarSign size={14} /> Dados Financeiros & NIT</div>
                   <div className="form-group full">
                     <label>NIT (Número de Identificação do Trabalhador)</label>
                     <input type="text" value={wizardData.nit} onChange={e => set('nit', e.target.value)} placeholder="000.00000.00-0" />
                   </div>
-                  
+
                   <div className="wizard-divider" style={{ marginTop: '10px', fontSize: '10px' }}>Conta Bancária Principal</div>
                   <div className="form-row-2">
                     <div className="form-group"><label>Tipo de Conta</label><input type="text" value={wizardData.banco_tipo} onChange={e => set('banco_tipo', e.target.value)} placeholder="Corrente, Poupança..." /></div>
@@ -869,10 +1097,6 @@ const Missionarios: React.FC = () => {
                         <input type="date" value={novaCasa.data_inicio} onChange={e => setNovaCasa(p => ({ ...p, data_inicio: e.target.value }))} />
                       </div>
                     </div>
-                    <label className="checkbox-label" style={{ marginTop: '6px' }}>
-                      <input type="checkbox" checked={novaCasa.is_superior} onChange={e => setNovaCasa(p => ({ ...p, is_superior: e.target.checked }))} />
-                      <Star size={14} /> {t('missionaries.wizard.houses.is_superior')}
-                    </label>
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
                       <button className="btn-add-casa-wz" onClick={addCasaVinculo}>
                         <Plus size={15} /> {t('missionaries.wizard.houses.bind_btn')}

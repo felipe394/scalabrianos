@@ -15,6 +15,7 @@ import Logs from './pages/Logs';
 import LogsAcesso from './pages/LogsAcesso';
 import Relatorios from './pages/Relatorios';
 import Financeiro from './pages/Financeiro';
+import GestaoFinanceira from './pages/GestaoFinanceira';
 import ForgotPassword from './pages/ForgotPassword';
 import MainLayout from './components/Layout/MainLayout';
 import { AuthProvider } from './context/AuthContext';
@@ -89,10 +90,17 @@ function App() {
           <Route path="/itinerario/filosofia" element={<ProtectedRoute requireAdmin><MainLayout><Filosofia /></MainLayout></ProtectedRoute>} />
           <Route path="/itinerario/postulado" element={<ProtectedRoute requireAdmin><MainLayout><Postulado /></MainLayout></ProtectedRoute>} />
 
-          {/* Financeiro — accessible to all padres/admins */}
+          {/* Financeiro — for missionaries and all roles who fill in the spreadsheet */}
           <Route path="/financeiro" element={
             <ProtectedRoute>
               <MainLayout><Financeiro /></MainLayout>
+            </ProtectedRoute>
+          } />
+
+          {/* Gestão Financeira — only for admins, oconomo, superior */}
+          <Route path="/gestao-financeira" element={
+            <ProtectedRoute requireManagement>
+              <MainLayout><GestaoFinanceira /></MainLayout>
             </ProtectedRoute>
           } />
 

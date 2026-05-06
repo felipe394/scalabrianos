@@ -45,7 +45,7 @@
 
 /* ─── Wizard modal ──────── */
 .wizard-modal {
-  max-width: 700px; width: 95vw; max-height: 92vh;
+  width: 1100px !important; min-width: 1100px !important; max-width: 95vw !important; max-height: 94vh;
   overflow: hidden; display: flex; flex-direction: column;
 }
 

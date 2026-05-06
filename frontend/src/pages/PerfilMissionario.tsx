@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, MapPin, BookOpen, Home as HomeIcon, Loader2, AlertCircle,
   Save, Trash2, Plus, Star, FileText, Download, ShieldCheck, Eye,
-  Activity, ChevronLeft, DollarSign, GraduationCap, Upload
+  Activity, ChevronLeft, DollarSign, GraduationCap, Upload, Lock
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -159,12 +159,10 @@ const PerfilMissionario: React.FC = () => {
 
   // Itinerary state
   const [itinerarioStages, setItinerarioStages] = useState<ItineraryStage[]>([]);
-  const [, setIsSavingItinerary] = useState(false);
-  const [, setIsSavingSteps] = useState(false);
-  const [, setItinDocUploading] = useState<number | null>(null);
+  const [isSavingItinerary, setIsSavingItinerary] = useState(false);
+  const [itinDocUploading, setItinDocUploading] = useState<number | null>(null);
   const itinFileInputRef = useRef<HTMLInputElement>(null);
-  const [activeItinIdx, setActiveItinIdx] = useState<number | null>(null);
-
+  const activeEtapaRef = useRef<string | null>(null);
   // New Sections State
   const [formacaoAcademica, setFormacaoAcademica] = useState<Record<string, unknown>[]>([]);
   const [atividadesMissionarias, setAtividadesMissionarias] = useState<Record<string, unknown>[]>([]);
@@ -182,12 +180,12 @@ const PerfilMissionario: React.FC = () => {
 
   // Forms for adding
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
-
-  const [tempForm, setTempForm] = useState<any>({});
+  const [tempForm, setTempForm] = useState<Record<string, unknown>>({});
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api';
-
-  const [tempForm, setTempForm] = useState<Record<string, unknown>>({});
+  void API_URL;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (id) fetchData(); }, [id]);
@@ -402,40 +400,65 @@ const PerfilMissionario: React.FC = () => {
     finally { setIsSavingItinerary(false); }
   };
 
-  const saveProximosSteps = async () => {
+  const saveBasicInfo = async () => {
     if (!missionario) return;
-    setIsSavingSteps(true);
+    setIsSaving(true);
     try {
-      await api.put(`/usuarios/${id}`, {
+      const payload: any = {
         nome: missionario.nome,
         login: missionario.login,
         situacao: missionario.situacao,
         is_oconomo: missionario.is_oconomo,
         is_superior: missionario.is_superior,
-        proximos_passos: missionario.proximos_passos
-      });
-      alert('Próximos passos salvos!');
-    } catch { alert('Erro ao salvar próximos passos'); }
-    finally { setIsSavingSteps(false); }
+        proximos_passos: missionario.proximos_passos,
+        role: 'PADRE',
+        status: 'ATIVO' 
+      };
+
+      if (newPassword.trim()) {
+        payload.password = newPassword;
+      }
+
+      await api.put(`/usuarios/${id}`, payload);
+      alert('Informações atualizadas com sucesso!');
+      setNewPassword('');
+    } catch (err: any) { 
+      alert('Erro ao salvar informações: ' + (err.response?.data?.message || err.message)); 
+    }
+    finally { setIsSaving(false); }
   };
 
-  const handleItinDocUpload = async (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
+  const saveProximosSteps = async () => {
+    if (!missionario) return;
+    setIsSaving(true);
+    try {
+      await api.put(`/usuarios/${id}`, { proximos_passos: missionario.proximos_passos });
+      alert('Próximos passos atualizados!');
+    } catch { alert('Erro ao salvar próximos passos'); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleItinDocUpload = async (e: React.ChangeEvent<HTMLInputElement>, etapa: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setItinDocUploading(idx);
-    const stage = itinerarioStages[idx];
+    setItinDocUploading(1); // placeholder
     const fd = new FormData();
     fd.append('arquivo', file);
-    fd.append('descricao', `Doc Etapa: ${stage.etapa}`);
+    fd.append('descricao', `Doc Etapa: ${etapa}`);
 
     try {
       const res = await api.post(`/usuarios/${id}/documentos`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const newPath = res.data.url || res.data.arquivo_path;
-      const newStages = [...itinerarioStages];
-      newStages[idx] = { ...newStages[idx], doc_path: newPath };
+      const existing = itinerarioStages.find(s => s.etapa === etapa);
+      let newStages = [];
+      if (existing) {
+        newStages = itinerarioStages.map(s => s.etapa === etapa ? { ...s, doc_path: newPath } : s);
+      } else {
+        newStages = [...itinerarioStages, { etapa, local: '', periodo: '', doc_path: newPath, is_sub_etapa: false }];
+      }
       setItinerarioStages(newStages);
       await api.post(`/usuarios/${id}/itinerario`, { stages: newStages });
     } catch {
@@ -446,37 +469,35 @@ const PerfilMissionario: React.FC = () => {
   };
 
 
-  const handleGenericAdd = async (endpoint: string, data: any, _refreshFunc: () => void) => {
+  const handleGenericAdd = async (endpoint: string, data: Record<string, unknown>) => {
+    setIsSaving(true);
+    try {
+      await api.post(`/usuarios/${id}/${endpoint}`, data);
+      setShowAddForm(null);
+      setTempForm({});
+      fetchData();
+    } catch { alert('Erro ao salvar registro'); }
+    finally { setIsSaving(false); }
+  };
 
-    const handleGenericAdd = async (endpoint: string, data: Record<string, unknown>) => {
+  const handleGenericDelete = async (endpoint: string, itemId: number) => {
+    if (!window.confirm('Excluir este registro?')) return;
+    try {
+      await api.delete(`/usuarios/${id}/${endpoint}/${itemId}`);
+      fetchData();
+    } catch { alert('Erro ao remover registro'); }
+  };
 
-      setIsSaving(true);
-      try {
-        await api.post(`/usuarios/${id}/${endpoint}`, data);
-        setShowAddForm(null);
-        setTempForm({});
-        fetchData();
-      } catch { alert('Erro ao salvar registro'); }
-      finally { setIsSaving(false); }
-    };
+  if (isLoading) return <div className="perfil-loading"><Loader2 className="animate-spin" size={40} /><p>{t('profile.loading')}</p></div>;
+  if (!missionario) return <div className="perfil-loading"><AlertCircle size={40} /><p>{t('profile.not_found')}</p></div>;
 
-    const handleGenericDelete = async (endpoint: string, itemId: number) => {
-      if (!window.confirm('Excluir este registro?')) return;
-      try {
-        await api.delete(`/usuarios/${id}/${endpoint}/${itemId}`);
-        fetchData();
-      } catch { alert('Erro ao remover registro'); }
-    };
-
-    if (isLoading) return <div className="perfil-loading"><Loader2 className="animate-spin" size={40} /><p>{t('profile.loading')}</p></div>;
-    if (!missionario) return <div className="perfil-loading"><AlertCircle size={40} /><p>{t('profile.not_found')}</p></div>;
-
-    const TABS = [
+  const TABS = [
       { key: 'dados', label: 'Dados & Contato', icon: <User size={16} /> },
       { key: 'religiosos', label: 'Religioso & Itinerário', icon: <BookOpen size={16} /> },
       { key: 'carreira', label: 'Formação & Missão', icon: <Activity size={16} /> },
       { key: 'saude', label: 'Saúde & Financeiro', icon: <ShieldCheck size={16} /> },
       { key: 'casas', label: t('profile.tabs.houses'), icon: <HomeIcon size={16} /> },
+      { key: 'acesso', label: 'Acesso', icon: <Lock size={16} /> },
       { key: 'obs', label: 'Observações', icon: <FileText size={16} /> },
     ];
 
@@ -494,7 +515,7 @@ const PerfilMissionario: React.FC = () => {
           <div className="perfil-main-info">
             <h1>{missionario.nome}</h1>
             <div className="perfil-badges">
-              <span className={`situacao-tag ${missionario.situacao.toLowerCase()}`}>{missionario.situacao}</span>
+              <span className={`situacao-tag ${(missionario.situacao || '').toLowerCase()}`}>{missionario.situacao}</span>
               {missionario.is_oconomo && <span className="cargo-badge oconomo"><ShieldCheck size={12} /> {t('profile.oconomo_badge')}</span>}
               {missionario.is_superior && <span className="cargo-badge superior"><Star size={12} /> {t('profile.superior_badge')}</span>}
             </div>
@@ -755,6 +776,7 @@ const PerfilMissionario: React.FC = () => {
                 )}
               </div>
 
+              {/* Seção de Documentos dentro da aba Dados */}
               <div className="section-card docs-section">
                 <h3 className="section-title"><FileText size={16} /> {t('profile.sections.docs')}</h3>
 
@@ -824,6 +846,55 @@ const PerfilMissionario: React.FC = () => {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* --- ACESSO AO SISTEMA --- */}
+          {activeTab === 'acesso' && (
+            <div className="tab-panel">
+              <div className="section-card">
+                <h3 className="section-title"><ShieldCheck size={16} /> Acesso ao Sistema</h3>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label>E-mail de Login</label>
+                    <input 
+                      type="email" 
+                      value={missionario.login} 
+                      onChange={e => setMissionario({ ...missionario, login: e.target.value })} 
+                      disabled={!canEdit} 
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Nova Senha (deixe em branco para não alterar)</label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input 
+                        type={showPassword ? 'text' : 'password'} 
+                        value={newPassword} 
+                        onChange={e => setNewPassword(e.target.value)} 
+                        disabled={!canEdit} 
+                        placeholder="••••••••"
+                        style={{ width: '100%' }}
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}
+                      >
+                        {showPassword ? <Eye size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {canEdit && (
+                  <div className="section-actions" style={{ marginTop: '20px' }}>
+                    <button className="btn-save-perfil" onClick={saveBasicInfo} disabled={isSaving}>
+                      {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Atualizar Acesso
+                    </button>
                   </div>
                 )}
               </div>
@@ -970,7 +1041,7 @@ const PerfilMissionario: React.FC = () => {
                             {stage.doc_path ? (
                               <a href={stage.doc_path} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
                             ) : (
-                              <button className="btn-itin-doc" onClick={() => { setActiveItinIdx(idx); itinFileInputRef.current?.click(); }} disabled={!canEdit}>
+                              <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
                                 <Plus size={14} /> Anexar
                               </button>
                             )}
@@ -1004,7 +1075,7 @@ const PerfilMissionario: React.FC = () => {
                             {stage.doc_path ? (
                               <a href={stage.doc_path} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
                             ) : (
-                              <button className="btn-itin-doc" onClick={() => { setActiveItinIdx(itinerarioStages.length + idx); itinFileInputRef.current?.click(); }} disabled={!canEdit}>
+                              <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
                                 <Plus size={14} /> Doc
                               </button>
                             )}
@@ -1014,7 +1085,12 @@ const PerfilMissionario: React.FC = () => {
                     );
                   })}
                 </div>
-                {canEdit && <button className="btn-save-perfil" onClick={saveItinerary} style={{ marginTop: '20px' }}>Salvar Itinerário</button>}
+                {canEdit && (
+                  <button className="btn-save-perfil" onClick={saveItinerary} disabled={isSavingItinerary} style={{ marginTop: '20px' }}>
+                    {isSavingItinerary ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Salvar Itinerário
+                  </button>
+                )}
               </div>
 
               <div className="section-card">
@@ -1251,7 +1327,7 @@ const PerfilMissionario: React.FC = () => {
             </div>
           )}
 
-          <input type="file" ref={itinFileInputRef} className="hidden" onChange={(e) => activeItinIdx !== null && handleItinDocUpload(e, activeItinIdx)} />
+          <input type="file" ref={itinFileInputRef} className="hidden" onChange={(e) => activeEtapaRef.current && handleItinDocUpload(e, activeEtapaRef.current)} />
 
           {/* --- MODAL --- */}
           {showAddForm && (

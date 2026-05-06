@@ -58,13 +58,8 @@ const Header: React.FC = () => {
         </div>
 
         <div className="user-info" onClick={() => navigate('/login')}>
-
-          <span>Admin</span>
-          <LogOut size={20} className="logout-icon" aria-label={t('header.logout')} />
-
           <span>{user?.nome || 'Admin'}</span>
           <LogOut size={20} className="logout-icon" title={t('header.logout')} />
-          (🚀: Telas de missionário, uploads de docs e APIs funcionando.)
         </div>
       </div>
 

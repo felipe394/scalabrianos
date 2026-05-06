@@ -45,7 +45,6 @@ const Home: React.FC = () => {
   const stats = statsData?.isMissionary 
     ? [
         { label: 'Sua Casa Atual', value: statsData.houseName || '---', icon: <HouseIcon size={24} />, color: '#013375' },
-        { label: 'Regional / Província', value: statsData.regional || '---', icon: <HouseIcon size={24} />, color: '#013375' },
         { label: 'Status Financeiro (Mês)', value: statsData.spreadsheetStatus || 'N/A', icon: <FileText size={24} />, color: statsData.spreadsheetStatus === 'VALIDADO' ? '#10b981' : '#f59e0b' },
         { label: 'Notificações', value: (statsData.recentActivities?.length || 0).toString(), icon: <Activity size={24} />, color: '#013375' },
       ]
@@ -158,10 +157,6 @@ const Home: React.FC = () => {
                  <button className="quick-btn" onClick={() => navigate('/financeiro')}>
                    <DollarSign size={20} />
                    <span>Preencher Planilha</span>
-                 </button>
-                 <button className="quick-btn" onClick={() => navigate('/missionarios/' + (user?.id || ''))}>
-                   <UserCheck size={20} />
-                   <span>Ver Meu Perfil</span>
                  </button>
                </>
             ) : (

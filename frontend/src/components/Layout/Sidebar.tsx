@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  Users, Lock, ClipboardList, DollarSign, ShieldCheck
+  Users, Lock, ClipboardList, DollarSign, ShieldCheck, TrendingUp
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -62,8 +62,13 @@ const Sidebar: React.FC = () => {
     menuItems.push({ icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' });
   }
 
-  // Finance - for everyone
+  // Finance - for everyone (registro de planilha)
   menuItems.push({ icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' });
+
+  // Gestão Financeira - only for admins, oconomo, superior
+  if (isAdminGeral || canEdit || isOconomo || isSuperior) {
+    menuItems.push({ icon: <TrendingUp size={20} />, label: 'Registros Financeiros', path: '/gestao-financeira' });
+  }
 
   if (!isSidebarOpen) return null;
 

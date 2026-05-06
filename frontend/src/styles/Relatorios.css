@@ -544,6 +544,18 @@
   background-color: rgba(74, 144, 226, 0.05);
 }
 
+.row-total-geral,
+.row-total-geral td {
+  background-color: #013375 !important;
+  color: #fff !important;
+}
+
+.row-total-geral:hover, 
+.row-total-geral:hover td {
+  background-color: #013375 !important;
+  color: #fff !important;
+}
+
 .excel-style input, .excel-style select {
   width: 100%;
   padding: 6px;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Save, Loader2, CheckCircle, XCircle,
+  Save, Loader2, CheckCircle, XCircle, AlertCircle,
   Calendar, FileText, Download, TrendingUp, TrendingDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -106,7 +106,9 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
         });
         setEditValues(vals);
         setApontamentos(res.data.apontamentos || '');
-        setSelectedCasa(res.data.casa_id.toString());
+        if (res.data.casa_id) {
+          setSelectedCasa(res.data.casa_id.toString());
+        }
       } else {
         setPlanilha(null);
         setEditValues({});
@@ -192,10 +194,11 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
     setIsValidating(true);
     try {
       await api.put(`/financas-mensais/${planilha.id}/validar`, { status, apontamentos });
-      alert(`Planilha ${status === 'VALIDADO' ? 'validada' : 'marcada para revisão'}!`);
+      alert(`Planilha ${status === 'VALIDADO' ? 'validada com sucesso' : 'devolvida para revisão'}!`);
       loadPlanilha();
-    } catch (err) {
-      alert('Erro ao validar');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro desconhecido';
+      alert('Erro ao validar planilha: ' + msg);
     } finally {
       setIsValidating(false);
     }
@@ -275,30 +278,11 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
         </div>
       </div>
 
-      {(canValidate || isSuperior) && (
+      {(canValidate || isSuperior) && selectedUserId && (
         <div className="view-mode-tabs">
-          <button
-            className={`mode-btn ${viewMode === 'individual' && !selectedUserId ? 'active' : ''}`}
-            onClick={() => {
-              setViewMode('individual');
-              setSelectedUserId(null);
-              setSelectedUserName('');
-              loadPlanilha();
-            }}
-          >
-            Minha Planilha
+          <button className="mode-btn active" style={{ marginLeft: 'auto' }}>
+            Revisando: {selectedUserName}
           </button>
-          <button
-            className={`mode-btn ${viewMode === 'consolidado' ? 'active' : ''}`}
-            onClick={() => setViewMode('consolidado')}
-          >
-            Relatório Consolidado
-          </button>
-          {selectedUserId && (
-            <button className="mode-btn active" style={{ marginLeft: 'auto' }}>
-              Revisando: {selectedUserName}
-            </button>
-          )}
         </div>
       )}
 

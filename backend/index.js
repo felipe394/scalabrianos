@@ -998,7 +998,7 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
       }
       planilhaId = existing[0].id;
       await connection.query(
-        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [total_credito, total_debito, planilhaId]
       );
       // Clean old items
@@ -1102,16 +1102,41 @@ app.put('/api/financas-mensais/:id/validar', authenticateToken, async (req, res)
     // 2. Log Action
     await logAction(req.user.id, 'VALIDAR_PLANILHA_MENSAL', 'tb_financas_mensais', `Planilha ${id} validada como ${status}`);
 
-    // 3. Create Notification if returned (DEVOLVIDO)
-    if (status === 'DEVOLVIDO') {
-      const [sheet] = await db.query('SELECT usuario_id, mes_referencia FROM tb_financas_mensais WHERE id = ?', [id]);
-      if (sheet.length > 0) {
+    // 3. Handle Notifications
+    const [sheet] = await db.query('SELECT usuario_id, casa_id, mes_referencia FROM tb_financas_mensais WHERE id = ?', [id]);
+    if (sheet.length > 0) {
+      const { usuario_id, casa_id, mes_referencia } = sheet[0];
+      
+      // Notify the missionary if returned
+      if (status === 'DEVOLVIDO') {
         await createNotification(
-          sheet[0].usuario_id, 
-          `Sua planilha de ${sheet[0].mes_referencia} foi devolvida para correções. Motivo: ${apontamentos || 'Não especificado'}`,
+          usuario_id, 
+          `Sua planilha de ${mes_referencia} foi devolvida para correções. Motivo: ${apontamentos || 'Não especificado'}`,
           'ALERTA',
           '/financeiro'
         );
+      }
+
+      // Notify the Economist of the house if the action was taken by a Superior or Admin
+      const [userRows] = await db.query('SELECT is_superior, role FROM tb_usuarios WHERE id = ?', [req.user.id]);
+      const sender = userRows[0];
+      if (sender && (sender.is_superior || sender.role === 'ADMIN_GERAL')) {
+        const [economos] = await db.query(`
+          SELECT u.id FROM tb_usuarios u
+          JOIN tb_missionario_casas mc ON u.id = mc.usuario_id
+          WHERE mc.casa_id = ? AND u.is_oconomo = 1 AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
+        `, [casa_id]);
+        
+        for (const eco of economos) {
+          if (eco.id !== req.user.id) {
+            await createNotification(
+              eco.id,
+              `A planilha de ${mes_referencia} (${usuario_id}) foi ${status === 'VALIDADO' ? 'validada' : 'devolvida'} pelo Superior/Admin.`,
+              'INFO',
+              '/gestao-financeira'
+            );
+          }
+        }
       }
     }
 
@@ -1307,7 +1332,7 @@ app.get('/api/usuarios/:id/documentos', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM tb_documentos WHERE usuario_id = ? ORDER BY created_at DESC', [req.params.id]);
     // Map to frontend-expected shape: url (from arquivo_path) and data_upload (from created_at)
-    const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+    const BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? '' : `http://localhost:${process.env.PORT || 5001}`);
     const docs = rows.map(r => ({
       ...r,
       url: r.arquivo_path ? `${BASE_URL}${r.arquivo_path}` : null,
@@ -1336,7 +1361,7 @@ app.post('/api/usuarios/:id/documentos', authenticateToken, (req, res, next) => 
   const safeFilename = sanitizeFilename(req.file.originalname);
   try {
     const filePath = `/uploads/documentos/${req.file.filename}`;
-    const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+    const BASE_URL = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? '' : `http://localhost:${process.env.PORT || 5001}`);
     const [result] = await db.query(
       'INSERT INTO tb_documentos (usuario_id, descricao, arquivo_path, arquivo_nome, tipo_arquivo) VALUES (?, ?, ?, ?, ?)',
       [req.params.id, sanitizeString(descricao) || 'Documento', filePath, safeFilename, ext]
