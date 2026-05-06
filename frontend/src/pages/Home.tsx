@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import '../styles/Home.css';
 
@@ -23,7 +22,6 @@ interface DashboardStats {
 const Home: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [statsData, setStatsData] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 

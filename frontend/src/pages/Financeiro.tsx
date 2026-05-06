@@ -3,7 +3,6 @@ import { DollarSign } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../api';
 import PlanilhaMensal from '../components/Financeiro/PlanilhaMensal';
-import { useAuth } from '../context/AuthContext';
 import '../styles/Relatorios.css';
 import '../styles/FinanceiroSpreadsheet.css';
 
@@ -21,8 +20,7 @@ interface Casa {
 
 const Financeiro: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const [casas, setCasas] = useState<Casa[]>([]);
+const [casas, setCasas] = useState<Casa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   useEffect(() => {

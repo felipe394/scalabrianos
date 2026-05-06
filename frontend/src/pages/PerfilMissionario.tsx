@@ -101,6 +101,51 @@ interface Documento {
   descricao: string;
   url: string;
   data_upload: string;
+  tipo_arquivo?: string;
+  arquivo_nome?: string;
+}
+
+interface FormacaoAcademica {
+  id: number;
+  curso: string;
+  faculdade: string;
+  periodo: string;
+  doc_path?: string;
+}
+
+interface AtividadeMissionaria {
+  id: number;
+  lugar: string;
+  periodo: string;
+  missao?: string;
+}
+
+interface ObraRealizada {
+  id: number;
+  lugar: string;
+  periodo: string;
+  obra?: string;
+}
+
+interface SaudeRecord {
+  id: number;
+  seguradora?: string;
+  sus_card?: string;
+  numero_carteira?: string;
+}
+
+interface ContaBancaria {
+  id: number;
+  tipo_conta: string;
+  titularidade: string;
+  agencia: string;
+  numero: string;
+}
+
+interface ObservacaoGeral {
+  id: number;
+  created_at: string;
+  texto: string;
 }
 
 interface CasaHistorico {
@@ -160,16 +205,16 @@ const PerfilMissionario: React.FC = () => {
   // Itinerary state
   const [itinerarioStages, setItinerarioStages] = useState<ItineraryStage[]>([]);
   const [isSavingItinerary, setIsSavingItinerary] = useState(false);
-  const [itinDocUploading, setItinDocUploading] = useState<number | null>(null);
+  const [_itinDocUploading, setItinDocUploading] = useState<number | null>(null);
   const itinFileInputRef = useRef<HTMLInputElement>(null);
   const activeEtapaRef = useRef<string | null>(null);
   // New Sections State
-  const [formacaoAcademica, setFormacaoAcademica] = useState<Record<string, unknown>[]>([]);
-  const [atividadesMissionarias, setAtividadesMissionarias] = useState<Record<string, unknown>[]>([]);
-  const [obrasRealizadas, setObrasRealizadas] = useState<Record<string, unknown>[]>([]);
-  const [saudeRecords, setSaudeRecords] = useState<Record<string, unknown>[]>([]);
-  const [contasBancarias, setContasBancarias] = useState<Record<string, unknown>[]>([]);
-  const [observacoesGerais, setObservacoesGerais] = useState<Record<string, unknown>[]>([]);
+  const [formacaoAcademica, setFormacaoAcademica] = useState<FormacaoAcademica[]>([]);
+  const [atividadesMissionarias, setAtividadesMissionarias] = useState<AtividadeMissionaria[]>([]);
+  const [obrasRealizadas, setObrasRealizadas] = useState<ObraRealizada[]>([]);
+  const [saudeRecords, setSaudeRecords] = useState<SaudeRecord[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [observacoesGerais, setObservacoesGerais] = useState<ObservacaoGeral[]>([]);
   const [nit, setNit] = useState('');
   const [situacaoData, setSituacaoData] = useState<SituacaoData>({
     data_falecimento: '', cidade_falecimento: '', certidao_obito_path: '', local_sepultamento: '',
@@ -1023,7 +1068,7 @@ const PerfilMissionario: React.FC = () => {
                     { label: '4.1.5 Noviciado', etapa: '4.1.5' },
                     { label: '4.1.6 Teologia', etapa: '4.1.6' },
                     { label: '4.1.7 Tirocínio', etapa: '4.1.7' },
-                  ].map((seg, idx) => {
+                  ].map((seg) => {
                     const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
                     return (
                       <div key={seg.etapa} className="itinerary-row-card">
@@ -1061,7 +1106,7 @@ const PerfilMissionario: React.FC = () => {
                     { label: '4.3.3 Diaconato', etapa: '4.3.3' },
                     { label: '4.3.4 Presbiterato', etapa: '4.3.4' },
                     { label: '4.4 Destinação', etapa: '4.4' },
-                  ].map((seg, idx) => {
+                  ].map((seg) => {
                     const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
                     return (
                       <div key={seg.etapa} className="itinerary-row-card simple">

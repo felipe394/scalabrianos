@@ -69,7 +69,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
   // Consolidated view state
   const [viewMode, setViewMode] = useState<'individual' | 'consolidado'>('individual');
   const [consolidadoData, setConsolidadoData] = useState<ConsolidatedRow[]>([]);
-  const [isConsolidadoLoading, setIsConsolidadoLoading] = useState(false);
+  const [_isConsolidadoLoading, setIsConsolidadoLoading] = useState(false);
   const [consolidadoStatus, setConsolidadoStatus] = useState<ConsolidatedStatus | null>(null);
   const [isSavingConsolidado, setIsSavingConsolidado] = useState(false);
 

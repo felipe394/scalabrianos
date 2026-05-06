@@ -59,7 +59,7 @@ const Header: React.FC = () => {
 
         <div className="user-info" onClick={() => navigate('/login')}>
           <span>{user?.nome || 'Admin'}</span>
-          <LogOut size={20} className="logout-icon" title={t('header.logout')} />
+          <LogOut size={20} className="logout-icon" aria-label={t('header.logout')} />
         </div>
       </div>
 
