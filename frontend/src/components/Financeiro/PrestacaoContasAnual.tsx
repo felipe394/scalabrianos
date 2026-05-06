@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Loader2, Calendar, FileText } from 'lucide-react';
+import { Save, Loader2, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api';
 

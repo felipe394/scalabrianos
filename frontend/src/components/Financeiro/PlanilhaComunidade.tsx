@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Save, Loader2, CheckCircle, XCircle, AlertCircle,
-  Calendar, FileText, Download, TrendingUp, TrendingDown
-} from 'lucide-react';
+import { Save, Loader2, Calendar, FileText, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';

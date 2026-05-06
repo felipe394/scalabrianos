@@ -27,7 +27,7 @@ interface PlanilhaData {
   usuario_id: number;
   casa_id: number;
   mes_referencia: string;
-  status: 'PENDENTE' | 'VALIDADO' | 'DEVOLVIDO';
+  status: 'PENDENTE' | 'VALIDADO' | 'DEVOLVIDO' | 'EM_VALIDACAO';
   total_credito: number;
   total_debito: number;
   num_missas_superior: number;
@@ -75,7 +75,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
   const [numMissas, setNumMissas] = useState(0);
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [anexoUrl, setAnexoUrl] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [_isUploading, setIsUploading] = useState(false);
 
   // Consolidated view state
   const [viewMode, setViewMode] = useState<'individual' | 'consolidado'>('individual');
