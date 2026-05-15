@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
+const { sendWelcomeEmail } = require('./emailService');
 require('dotenv').config();
 
 // Multer configuration for document uploads
@@ -293,7 +294,20 @@ if (!fs.existsSync(uploadsDataDir)) {
 // Users
 app.get('/api/usuarios', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior FROM tb_usuarios');
+    const [rows] = await db.query(`
+      SELECT u.id, u.nome, u.login, u.role, u.status, u.situacao, u.is_oconomo, u.is_superior,
+      c.nome as casa_nome, c.cidade, c.pais,
+      (SELECT COUNT(*) FROM tb_dados_religiosos dr WHERE dr.usuario_id = u.id) as has_3,
+      (SELECT COUNT(*) FROM tb_itinerario_formativo it WHERE it.usuario_id = u.id) as has_4,
+      (SELECT COUNT(*) FROM tb_formacao_academica fa WHERE fa.usuario_id = u.id) as has_5,
+      (SELECT COUNT(*) FROM tb_atividade_missionaria am WHERE am.usuario_id = u.id) as has_6,
+      (SELECT COUNT(*) FROM tb_obras_realizadas orr WHERE orr.usuario_id = u.id) as has_11,
+      (SELECT COUNT(*) FROM tb_observacoes_gerais og WHERE og.usuario_id = u.id) as has_12
+      FROM tb_usuarios u
+      LEFT JOIN tb_missionario_casas mc ON mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
+      LEFT JOIN tb_casas_religiosas c ON c.id = mc.casa_id
+      GROUP BY u.id
+    `);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -302,7 +316,7 @@ app.get('/api/usuarios', authenticateToken, async (req, res) => {
 
 app.get('/api/usuarios/:id', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior, proximos_passos FROM tb_usuarios WHERE id = ?', [req.params.id]);
+    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior, proximos_passos, permissoes FROM tb_usuarios WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ message: 'Usuário não encontrado' });
     res.json(rows[0]);
   } catch (error) {
@@ -312,7 +326,17 @@ app.get('/api/usuarios/:id', authenticateToken, async (req, res) => {
 
 app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, login, role, status, situacao, is_oconomo, is_superior FROM tb_usuarios');
+    const [rows] = await db.query(`
+      SELECT 
+        u.id, u.nome, u.login, u.role, u.status, u.situacao, u.is_oconomo, u.is_superior, u.permissoes,
+        (SELECT c.nome FROM tb_missionario_casas mc 
+         JOIN tb_casas_religiosas c ON c.id = mc.casa_id 
+         WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) 
+         LIMIT 1) as casa_nome,
+        (SELECT dc.cidade_estado FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1) as cidade,
+        (SELECT dc.pais FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1) as pais
+      FROM tb_usuarios u
+    `);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -325,10 +349,14 @@ app.post('/api/usuarios', authenticateToken, async (req, res) => {
   try {
     console.log('Creating user:', { nome, login, role, status, situacao, is_oconomo, is_superior });
     const [result] = await db.query(
-      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao, is_oconomo, is_superior) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [nome, login, hashedPassword, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0]
+      'INSERT INTO tb_usuarios (nome, login, password_hash, role, status, situacao, is_oconomo, is_superior, permissoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [nome, login, hashedPassword, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, JSON.stringify(req.body.permissoes || {})]
     );
     await logAction(req.user.id, 'CRIO_USUARIO', 'tb_usuarios', `Criou usuario ${login}`);
+    
+    // Send welcome email
+    await sendWelcomeEmail(login, nome, password);
+
     res.status(201).json({ id: result.insertId, ...req.body });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -341,8 +369,8 @@ app.put('/api/usuarios/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?';
-    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?, permissoes = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null, JSON.stringify(req.body.permissoes || {})];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -367,8 +395,8 @@ app.post('/api/usuarios/:id/update', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?';
-    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null];
+    let query = 'UPDATE tb_usuarios SET nome = ?, login = ?, role = ?, status = ?, situacao = ?, is_oconomo = ?, is_superior = ?, proximos_passos = ?, permissoes = ?';
+    let params = [nome, login, role, status, situacao, is_oconomo ? 1 : 0, is_superior ? 1 : 0, proximos_passos || null, JSON.stringify(req.body.permissoes || {})];
 
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -436,6 +464,28 @@ app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
     );
     await logAction(req.user.id, 'ATUALIZAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa ID ${id} ("${nome}") atualizada`);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_casas_religiosas WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ message: 'Casa não encontrada' });
+    
+    // Also get missionaries currently in this house
+    const [missionarios] = await db.query(`
+      SELECT u.id, u.nome, u.login, u.situacao
+      FROM tb_usuarios u
+      JOIN tb_missionario_casas mc ON u.id = mc.usuario_id
+      WHERE mc.casa_id = ? AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
+    `, [req.params.id]);
+    
+    const house = rows[0];
+    house.missionarios = missionarios;
+    
+    res.json(house);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -687,6 +737,44 @@ app.post('/api/usuarios/:id/itinerario', authenticateToken, async (req, res) => 
   }
 });
 
+app.get('/api/itinerario-dashboard', authenticateToken, async (req, res) => {
+  try {
+    const [users] = await db.query(`
+      SELECT u.id, u.nome, 
+      (SELECT c.nome FROM tb_missionario_casas mc 
+       JOIN tb_casas_religiosas c ON c.id = mc.casa_id 
+       WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) 
+       LIMIT 1) as casa_nome
+      FROM tb_usuarios u 
+      WHERE u.role = 'PADRE'
+    `);
+
+    const dashboard = await Promise.all(users.map(async (u) => {
+      const [stages] = await db.query('SELECT etapa, is_sub_etapa FROM tb_itinerario_formativo WHERE usuario_id = ?', [u.id]);
+      const [academic] = await db.query('SELECT COUNT(*) as count FROM tb_formacao_academica WHERE usuario_id = ?', [u.id]);
+      
+      // We consider these the core stages
+      const mandatory = ['SEMINARIO', 'PROPEDEUTICO', 'FILOSOFIA', 'POSTULADO', 'NOVICIADO', 'TEOLOGIA'];
+      const completed = stages.map(s => s.etapa);
+      const missing = mandatory.filter(m => !completed.includes(m));
+      
+      return {
+        ...u,
+        stages: completed,
+        missing,
+        has_academic: academic[0].count > 0,
+        progress: mandatory.length - missing.length,
+        total_mandatory: mandatory.length
+      };
+    }));
+
+    res.json(dashboard);
+  } catch (error) {
+    console.error('Error in itinerary dashboard:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // --- New Endpoints ---
 app.get('/api/logs', authenticateToken, async (req, res) => {
   try {
@@ -730,6 +818,16 @@ app.post('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res
     );
     await logAction(req.user.id, 'ADICIONOU_CASA', 'tb_missionario_casas', `Usuário ${req.params.id} vinculado à casa ${casa_id}`);
     res.json({ success: true, id: result.insertId });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/usuarios/:id/casas-historico/:vid', authenticateToken, async (req, res) => {
+  try {
+    await db.query('DELETE FROM tb_missionario_casas WHERE id = ? AND usuario_id = ?', [req.params.vid, req.params.id]);
+    await logAction(req.user.id, 'REMOVEU_CASA', 'tb_missionario_casas', `Vínculo ${req.params.vid} do usuário ${req.params.id} removido`);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -872,6 +970,30 @@ app.delete('/api/usuarios/:id/obras-realizadas/:oid', authenticateToken, async (
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// Quadro de Pessoal
+app.get('/api/usuarios/:id/quadro-pessoal', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM tb_quadro_pessoal WHERE usuario_id = ?', [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/quadro-pessoal', authenticateToken, async (req, res) => {
+  const { funcao_atual, competencias, cv_path } = req.body;
+  try {
+    await db.query('DELETE FROM tb_quadro_pessoal WHERE usuario_id = ?', [req.params.id]);
+    await db.query(
+      'INSERT INTO tb_quadro_pessoal (usuario_id, funcao_atual, competencias, cv_path) VALUES (?, ?, ?, ?)',
+      [req.params.id, funcao_atual, competencias, cv_path]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // 6. Observações Gerais
 app.get('/api/usuarios/:id/observacoes-gerais', authenticateToken, async (req, res) => {
   try {
@@ -1003,7 +1125,7 @@ app.get('/api/financas-mensais/usuario/:usuario_id/mes/:mes', authenticateToken,
 });
 
 app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
-  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito, num_missas_superior, anexo_path } = req.body;
+  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa } = req.body;
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -1018,15 +1140,15 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
       }
       planilhaId = existing[0].id;
       await connection.query(
-        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, num_missas_superior = ?, anexo_path = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [total_credito, total_debito, num_missas_superior || 0, anexo_path || null, planilhaId]
+        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, num_missas_superior = ?, anexo_path = ?, obs_receita = ?, obs_despesa = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null, planilhaId]
       );
       // Clean old items
       await connection.query('DELETE FROM tb_financas_mensais_itens WHERE planilha_id = ?', [planilhaId]);
     } else {
       const [result] = await connection.query(
-        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior || 0, anexo_path || null]
+        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null]
       );
       planilhaId = result.insertId;
     }
@@ -1477,9 +1599,9 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
     }
 
     // Admin view
-    const [userCount] = await db.query('SELECT COUNT(*) as count FROM tb_usuarios');
+    const [userCount] = await db.query("SELECT COUNT(*) as count FROM tb_usuarios WHERE role = 'PADRE'");
     const [houseCount] = await db.query('SELECT COUNT(*) as count FROM tb_casas_religiosas');
-    const [itineraryCount] = await db.query('SELECT COUNT(*) as count FROM tb_itinerario_formativo');
+    const [itineraryCount] = await db.query("SELECT COUNT(*) as count FROM tb_usuarios WHERE role = 'PADRE'");
     
     res.json({
       totalUsers: userCount[0].count,
@@ -1519,14 +1641,24 @@ app.post('/api/stats', authenticateToken, async (req, res) => {
       });
     }
 
-    const [userCount] = await db.query('SELECT COUNT(*) as count FROM tb_usuarios');
+    const [userCount] = await db.query("SELECT COUNT(*) as count FROM tb_usuarios WHERE role = 'PADRE'");
     const [houseCount] = await db.query('SELECT COUNT(*) as count FROM tb_casas_religiosas');
-    const [itineraryCount] = await db.query('SELECT COUNT(*) as count FROM tb_itinerario_formativo');
+    const [itineraryCount] = await db.query("SELECT COUNT(*) as count FROM tb_usuarios WHERE role = 'PADRE'");
     
+    // Detailed counts by type
+    let housesByType = { CR: 0, CI: 0, M: 0, P: 0, PV: 0, CS: 0 };
+    try {
+      const [typeRows] = await db.query('SELECT tipo, COUNT(*) as count FROM tb_casas_religiosas GROUP BY tipo');
+      typeRows.forEach(r => { if (r.tipo) housesByType[r.tipo] = r.count; });
+    } catch (e) {
+      console.warn('Could not fetch house types (maybe column not exists yet)');
+    }
+
     res.json({
       totalUsers: userCount[0].count,
       totalHouses: houseCount[0].count,
       totalItineraries: itineraryCount[0].count,
+      housesByType,
       recentActivities: [
         { id: 1, user: 'Admin', activity: 'Sistema pronto', time: 'Agora mesmo' }
       ]

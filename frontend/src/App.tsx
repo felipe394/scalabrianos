@@ -11,11 +11,13 @@ import Perfis from './pages/Perfis';
 import Administradores from './pages/Administradores';
 import Missionarios from './pages/Missionarios';
 import PerfilMissionario from './pages/PerfilMissionario';
+import PerfilCasa from './pages/PerfilCasa';
 import Logs from './pages/Logs';
 import LogsAcesso from './pages/LogsAcesso';
 import Relatorios from './pages/Relatorios';
 import Financeiro from './pages/Financeiro';
 import GestaoFinanceira from './pages/GestaoFinanceira';
+import MapaRNSMM from './pages/MapaRNSMM';
 import ForgotPassword from './pages/ForgotPassword';
 import MainLayout from './components/Layout/MainLayout';
 import { AuthProvider } from './context/AuthContext';
@@ -73,6 +75,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/casas-religiosas/:id" element={
+            <ProtectedRoute requireManagement>
+              <MainLayout><PerfilCasa /></MainLayout>
+            </ProtectedRoute>
+          } />
+
           <Route path="/missionarios/:id" element={
             <ProtectedRoute requireManagement>
               <MainLayout><PerfilMissionario /></MainLayout>
@@ -104,12 +112,19 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/mapa" element={
+            <ProtectedRoute>
+              <MainLayout><MapaRNSMM /></MainLayout>
+            </ProtectedRoute>
+          } />
+
           <Route path="/relatorios" element={
             <ProtectedRoute requireAdmin>
               <MainLayout><Relatorios /></MainLayout>
             </ProtectedRoute>
           } />
 
+          <Route path="/home" element={<Navigate to="/mapa" replace />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>

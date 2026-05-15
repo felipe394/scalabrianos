@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Edit2, X, Loader2, AlertCircle, Plus, DollarSign, Trash2, Download, Home as HomeIcon, Save } from 'lucide-react';
+import { Edit2, X, Loader2, AlertCircle, Plus, DollarSign, Trash2, Download, Home as HomeIcon, Save, Search, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +14,20 @@ interface ReligiousHouse {
   missionarios_count: number;
   regional?: string;
   data_referencia_casa?: string;
+  paroco?: string;
+  vigario_paroquial?: string;
+  tipo?: string;
+  pm_code?: string;
 }
+
+const NOMENCLATURES = [
+  { code: 'CR', label: 'CR - CASA RELIGIOSA' },
+  { code: 'CI', label: 'CI - CENTRO INTEGRAÇÃO' },
+  { code: 'P', label: 'P - PARÓQUIA' },
+  { code: 'M', label: 'M - MISSÃO' },
+  { code: 'PV', label: 'PV - PASTORAL VOCACIONAL' },
+  { code: 'CS', label: 'CS - CASA SÊNIOR' },
+];
 
 const CasasReligiosas: React.FC = () => {
   const { t } = useTranslation();
@@ -25,6 +38,8 @@ const CasasReligiosas: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [filterName, setFilterName] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [filterCountry, setFilterCountry] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
 
   const [editingHouse, setEditingHouse] = useState<ReligiousHouse | null>(null);
@@ -52,13 +67,17 @@ const CasasReligiosas: React.FC = () => {
   const filteredHouses = useMemo(() => {
     return houses.filter((house) => {
       const matchesName = house.nome.toLowerCase().includes(filterName.toLowerCase());
+      const matchesCity = (house.endereco || '').toLowerCase().includes(filterCity.toLowerCase());
+      const matchesCountry = (house.regional || '').toLowerCase().includes(filterCountry.toLowerCase());
       const matchesStatus = filterStatus === 'Todos' || house.status === filterStatus;
-      return matchesName && matchesStatus;
+      return matchesName && matchesCity && matchesCountry && matchesStatus;
     });
-  }, [houses, filterName, filterStatus]);
+  }, [houses, filterName, filterCity, filterCountry, filterStatus]);
 
   const handleClearFilters = () => {
     setFilterName('');
+    setFilterCity('');
+    setFilterCountry('');
     setFilterStatus('Todos');
   };
 
@@ -125,30 +144,57 @@ const CasasReligiosas: React.FC = () => {
       </div>
 
       <div className="filters-card">
-        <div className="filter-group">
-          <label>{t('casas.name').toUpperCase()}</label>
-          <input
-            type="text"
-            placeholder={t('missionaries.search_placeholder') + "..."}
-            value={filterName}
-            onChange={(e) => setFilterName(e.target.value)}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+          <div className="filter-group">
+            <label>{t('casas.name').toUpperCase()}</label>
+            <input
+              type="text"
+              placeholder="Filtrar por nome..."
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+            />
+          </div>
+          <div className="filter-group">
+            <label>{t('casas.city').toUpperCase()}</label>
+            <input
+              type="text"
+              placeholder="Filtrar por cidade..."
+              value={filterCity}
+              onChange={(e) => setFilterCity(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+            />
+          </div>
+          <div className="filter-group">
+            <label>{t('casas.country').toUpperCase()}</label>
+            <input
+              type="text"
+              placeholder="Filtrar por país..."
+              value={filterCountry}
+              onChange={(e) => setFilterCountry(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+            />
+          </div>
+          <div className="filter-group">
+            <label>{t('casas.status').toUpperCase()}</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
+            >
+              <option value="Todos">{t('missionaries.filters.all')}</option>
+              <option value="ATIVO">Ativo</option>
+              <option value="INATIVO">Inativo</option>
+            </select>
+          </div>
         </div>
-        <div className="filter-group">
-          <label>{t('casas.status').toUpperCase()}</label>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="Todos">{t('missionaries.filters.all')}</option>
-            <option value="ATIVO">ATIVO</option>
-            <option value="INATIVO">INATIVO</option>
-          </select>
-        </div>
-        <div className="filter-actions">
-          <button className="btn-clear" onClick={handleClearFilters}>
-            {t('common.cancel')}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px' }}>
+           <button className="btn-filter-main" onClick={handleClearFilters} style={{ background: '#64748b', marginRight: '10px' }}>
+              Limpar
+           </button>
+           <button className="btn-filter-main">
+              <Search size={18} /> Filtrar
+           </button>
         </div>
       </div>
 
@@ -169,11 +215,10 @@ const CasasReligiosas: React.FC = () => {
               <tr>
                 <th>{t('missionaries.table.id')}</th>
                 <th>{t('casas.name')}</th>
-                <th>{t('casas.address')}</th>
-                <th>{t('casas.regional')}</th>
-                <th>{t('casas.reference_date')}</th>
-                <th className="center">{t('casas.missionaries')}</th>
+                <th>{t('casas.city')}/UF</th>
+                <th>{t('casas.country')}</th>
                 <th className="center">{t('casas.status')}</th>
+                <th className="center">{t('casas.pm')}</th>
                 <th className="center">{t('missionaries.table.actions')}</th>
               </tr>
             </thead>
@@ -182,21 +227,20 @@ const CasasReligiosas: React.FC = () => {
                 <tr key={house.id}>
                   <td>#{house.id}</td>
                   <td className="bold">{house.nome}</td>
-                  <td>{house.endereco}</td>
-                  <td>{house.regional}</td>
-                  <td>{house.data_referencia_casa}</td>
-                  <td className="center">
-                    <span className="count-badge">{house.missionarios_count}</span>
-                  </td>
+                  <td>{house.endereco ? house.endereco.split(',').pop()?.trim() : '---'}</td>
+                  <td>{house.regional || '---'}</td>
                   <td className="center">
                     <span className={`status-tag ${house.status.toLowerCase()}`}>
                       {house.status}
                     </span>
                   </td>
                   <td className="center">
+                    <span className="pm-code">{house.pm_code || '---'}</span>
+                  </td>
+                  <td className="center">
                     <div className="house-actions">
                       <button 
-                        className="btn-finance-lite" 
+                        className="btn-action-icon finance" 
                         title={t('casas.cost_registration')}
                         onClick={() => navigate('/financeiro', { state: { house_id: house.id } })}
                       >
@@ -205,14 +249,14 @@ const CasasReligiosas: React.FC = () => {
                       {canEdit && (
                         <>
                           <button 
-                            className="btn-icon-edit btn-edit-lite" 
+                            className="btn-action-icon edit" 
                             title={t('common.edit')}
                             onClick={() => handleOpenEdit(house)}
                           >
                             <Edit2 size={16} />
                           </button>
                           <button 
-                            className="btn-icon-delete btn-delete-lite" 
+                            className="btn-action-icon delete" 
                             title={t('common.delete')}
                             onClick={() => handleDeleteHouse(house.id)}
                           >
@@ -220,6 +264,13 @@ const CasasReligiosas: React.FC = () => {
                           </button>
                         </>
                       )}
+                      <button 
+                        className="btn-action-icon view" 
+                        title={t('common.view')}
+                        onClick={() => navigate(`/casas-religiosas/${house.id}`)}
+                      >
+                        <Eye size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -243,54 +294,94 @@ const CasasReligiosas: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleSaveHouse}>
+            <form onSubmit={handleSaveHouse} className="house-form">
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>{t('casas.tipo')}</label>
+                  <select
+                    value={editingHouse.tipo || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, tipo: e.target.value })}
+                  >
+                    <option value="">Selecione...</option>
+                    {NOMENCLATURES.map(n => <option key={n.code} value={n.code}>{n.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>{t('casas.pm')}</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: CR01"
+                    value={editingHouse.pm_code || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, pm_code: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div className="form-group">
                 <label>{t('casas.name')}</label>
                 <input
                   type="text"
+                  placeholder="Nome da presença..."
                   value={editingHouse.nome}
                   onChange={(e) => setEditingHouse({ ...editingHouse, nome: e.target.value })}
                   required
                 />
               </div>
+
               <div className="form-group">
                 <label>{t('casas.address')}</label>
                 <input
                   type="text"
+                  placeholder="Endereço completo..."
                   value={editingHouse.endereco}
                   onChange={(e) => setEditingHouse({ ...editingHouse, endereco: e.target.value })}
                   required
                 />
               </div>
-              <div className="form-row">
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>{t('casas.paroco')}</label>
+                  <input
+                    type="text"
+                    placeholder="Nome do Pároco..."
+                    value={editingHouse.paroco || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, paroco: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('casas.vigario')}</label>
+                  <input
+                    type="text"
+                    placeholder="Nome do Vigário..."
+                    value={editingHouse.vigario_paroquial || ''}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, vigario_paroquial: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-2">
                 <div className="form-group">
                   <label>{t('casas.regional')}</label>
                   <input
                     type="text"
+                    placeholder={t('casas.regional_placeholder')}
                     value={editingHouse.regional || ''}
                     onChange={(e) => setEditingHouse({ ...editingHouse, regional: e.target.value })}
-                    placeholder={t('casas.regional_placeholder')}
                   />
                 </div>
                 <div className="form-group">
-                  <label>{t('casas.reference_date')}</label>
-                  <input
-                    type="date"
-                    value={editingHouse.data_referencia_casa || ''}
-                    onChange={(e) => setEditingHouse({ ...editingHouse, data_referencia_casa: e.target.value })}
-                  />
+                  <label>{t('casas.status')}</label>
+                  <select
+                    value={editingHouse.status}
+                    onChange={(e) => setEditingHouse({ ...editingHouse, status: e.target.value as any })}
+                  >
+                    <option value="ATIVO">ATIVO</option>
+                    <option value="INATIVO">INATIVO</option>
+                  </select>
                 </div>
               </div>
-              <div className="form-group">
-                <label>{t('casas.status')}</label>
-                <select
-                  value={editingHouse.status}
-                  onChange={(e) => setEditingHouse({ ...editingHouse, status: e.target.value as any })}
-                >
-                  <option value="ATIVO">ATIVO</option>
-                  <option value="INATIVO">INATIVO</option>
-                </select>
-              </div>
+
               <div className="modal-footer">
                 <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>
                   {t('common.cancel')}

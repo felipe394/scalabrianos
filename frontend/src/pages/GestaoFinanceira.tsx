@@ -277,14 +277,14 @@ const GestaoFinanceira: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
-        <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-          <div className="filter-item">
-            <label><Calendar size={14} /> Mês de Referência</label>
+      <div className="filters-card-simple">
+        <div className="filters-row">
+          <div className="filter-field">
+            <label>Mês de Referência</label>
             <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
           </div>
-          <div className="filter-item">
-            <label><Home size={14} /> Casa Religiosa</label>
+          <div className="filter-field">
+            <label>Casa Religiosa</label>
             <select
               value={selectedCasa}
               onChange={e => setSelectedCasa(e.target.value)}
@@ -294,12 +294,12 @@ const GestaoFinanceira: React.FC = () => {
               {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
-          <div className="filter-item" style={{ position: 'relative' }}>
-            <label><Users size={14} /> Missionário</label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div className="filter-field search-missionary-field">
+            <label>Missionário</label>
+            <div className="autocomplete-wrapper">
               <input
                 type="text"
-                placeholder="Digite o nome..."
+                placeholder="Pesquisar missionário..."
                 value={searchMissionario}
                 onChange={e => handleSearchChange(e.target.value)}
                 onFocus={() => {
@@ -308,43 +308,20 @@ const GestaoFinanceira: React.FC = () => {
                     setShowDropdown(true);
                   }
                 }}
-                onBlur={() => setTimeout(() => setShowDropdown(false), 180)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                 autoComplete="off"
-                style={{ paddingRight: searchMissionario ? '32px' : undefined }}
               />
-              {searchMissionario && (
-                <button
-                  onClick={handleClearMissionario}
-                  style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '16px', lineHeight: 1, padding: 0 }}
-                  title="Limpar"
-                >✕</button>
+              {searchMissionario && <button className="clear-search" onClick={handleClearMissionario}>✕</button>}
+              {showDropdown && dropdownOptions.length > 0 && (
+                <div className="autocomplete-dropdown">
+                  {dropdownOptions.map(m => (
+                    <div key={m.id} className="dropdown-item" onMouseDown={() => handleSelectMissionario(m)}>
+                      {m.nome}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            {showDropdown && dropdownOptions.length > 0 && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '220px', overflowY: 'auto', marginTop: '4px'
-              }}>
-                {dropdownOptions.map(m => (
-                  <div
-                    key={m.id}
-                    onMouseDown={() => handleSelectMissionario(m)}
-                    style={{
-                      padding: '10px 14px', cursor: 'pointer', fontSize: '14px',
-                      borderBottom: '1px solid #f1f5f9',
-                      background: selectedMissionarioId === m.id ? '#eff6ff' : 'transparent',
-                      color: selectedMissionarioId === m.id ? '#3b82f6' : '#1e293b',
-                      fontWeight: selectedMissionarioId === m.id ? 600 : 400,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-                    onMouseLeave={e => (e.currentTarget.style.background = selectedMissionarioId === m.id ? '#eff6ff' : 'transparent')}
-                  >
-                    {m.nome}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

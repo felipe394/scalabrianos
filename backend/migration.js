@@ -4,7 +4,7 @@ async function runMigration() {
   try {
     // Modify tb_usuarios enum
     console.log("Altering tb_usuarios role ENUM...");
-    await pool.query(`ALTER TABLE tb_usuarios MODIFY COLUMN role ENUM('ADMIN_GERAL', 'ADMINISTRADOR', 'COLABORADOR', 'INTERMITENTE', 'PADRE') DEFAULT 'COLABORADOR'`);
+    await pool.query(`ALTER TABLE tb_usuarios MODIFY COLUMN role ENUM('ADMIN_GERAL', 'ADMINISTRADOR', 'COLABORADOR', 'INTERMITENTE', 'PADRE', 'REGISTRO_REGIONAL') DEFAULT 'COLABORADOR'`);
     
     // Add is_oconomo column if not exists
     console.log("Adding is_oconomo to tb_usuarios...");
@@ -12,6 +12,33 @@ async function runMigration() {
       await pool.query(`ALTER TABLE tb_usuarios ADD COLUMN is_oconomo BOOLEAN DEFAULT FALSE`);
     } catch (e) {
       if (e.code === 'ER_DUP_FIELDNAME') console.log("is_oconomo already exists");
+      else throw e;
+    }
+
+    // Add is_superior column
+    console.log("Adding is_superior to tb_usuarios...");
+    try {
+      await pool.query(`ALTER TABLE tb_usuarios ADD COLUMN is_superior BOOLEAN DEFAULT FALSE`);
+    } catch (e) {
+      if (e.code === 'ER_DUP_FIELDNAME') console.log("is_superior already exists");
+      else throw e;
+    }
+
+    // Add permissoes column
+    console.log("Adding permissoes to tb_usuarios...");
+    try {
+      await pool.query(`ALTER TABLE tb_usuarios ADD COLUMN permissoes JSON`);
+    } catch (e) {
+      if (e.code === 'ER_DUP_FIELDNAME') console.log("permissoes already exists");
+      else throw e;
+    }
+
+    // Add proximos_passos column
+    console.log("Adding proximos_passos to tb_usuarios...");
+    try {
+      await pool.query(`ALTER TABLE tb_usuarios ADD COLUMN proximos_passos TEXT`);
+    } catch (e) {
+      if (e.code === 'ER_DUP_FIELDNAME') console.log("proximos_passos already exists");
       else throw e;
     }
 
@@ -61,6 +88,20 @@ async function runMigration() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (casa_id) REFERENCES tb_casas_religiosas(id) ON DELETE CASCADE,
         FOREIGN KEY (registrado_por) REFERENCES tb_usuarios(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Create tb_quadro_pessoal
+    console.log("Creating tb_quadro_pessoal...");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tb_quadro_pessoal (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        funcao_atual VARCHAR(255),
+        competencias TEXT,
+        cv_path VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE
       )
     `);
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  Users, Lock, ClipboardList, DollarSign, ShieldCheck, TrendingUp
+  Users, Lock, ClipboardList, DollarSign, ShieldCheck, TrendingUp, MapPin, Globe, Milestone
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,7 +28,7 @@ const Sidebar: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdminGeral, canEdit, isOconomo, isSuperior } = useAuth();
+  const { isAdminGeral, canEdit, isOconomo, isSuperior, isRegional } = useAuth();
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     [t('menu.admin')]: true,
@@ -39,36 +39,41 @@ const Sidebar: React.FC = () => {
     setOpenSections(prev => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const menuItems: MenuItem[] = [
-    { icon: <HomeIcon size={20} />, label: t('menu.home'), path: '/home' },
-  ];
+  const menuItems: MenuItem[] = [];
 
-  // Administration Menu - only for admins
-  if (isAdminGeral || canEdit) {
+  // 1. Missionários / Seminaristas
+  if (isAdminGeral || canEdit || isRegional) {
+    menuItems.push({ icon: <Users size={20} />, label: t('menu.missionaries'), path: '/missionarios' });
+  }
+
+  // 2. Presença Missionária
+  if (isAdminGeral || canEdit || isRegional) {
+    menuItems.push({ icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' });
+  }
+
+  // 3. Prestação de Contas
+  menuItems.push({ icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' });
+
+  // 4. Mapa RNSMM
+  menuItems.push({ icon: <Globe size={20} />, label: t('menu.map'), path: '/mapa' });
+
+
+
+
+  // 5. Gestão da Plataforma
+  if (isAdminGeral || canEdit || isRegional) {
     menuItems.push({
       label: t('menu.admin'),
       icon: <Settings size={20} />,
       subItems: [
         { icon: <Lock size={18} />, label: t('menu.profiles'), path: '/administradores' },
-        { icon: <Users size={18} />, label: t('menu.missionaries'), path: '/missionarios' },
         { icon: <ClipboardList size={18} />, label: t('menu.system_logs'), path: '/logs' },
         { icon: <ShieldCheck size={18} />, label: t('menu.access_logs'), path: '/logs-acesso' },
       ]
     });
   }
 
-  // Houses - ONLY for admins
-  if (isAdminGeral || canEdit) {
-    menuItems.push({ icon: <HomeIcon size={20} />, label: t('menu.houses'), path: '/casas-religiosas' });
-  }
 
-  // Finance - for everyone (registro de planilha)
-  menuItems.push({ icon: <DollarSign size={20} />, label: t('menu.finance'), path: '/financeiro' });
-
-  // Gestão Financeira - only for admins, oconomo, superior
-  if (isAdminGeral || canEdit || isOconomo || isSuperior) {
-    menuItems.push({ icon: <TrendingUp size={20} />, label: 'Registros Financeiros', path: '/gestao-financeira' });
-  }
 
   if (!isSidebarOpen) return null;
 

@@ -29,7 +29,13 @@ const Financeiro: React.FC = () => {
   const { isAdminGeral, isOconomo, isSuperior, isPadre } = useAuth();
   const [casas, setCasas] = useState<Casa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [activeTab, setActiveTab] = useState<'individual' | 'comunidade' | 'planejamento' | 'anual'>('individual');
+  const [activeTab, setActiveTab] = useState<'individual' | 'comunidade' | 'planejamento' | 'anual'>('comunidade');
+
+  useEffect(() => {
+    if (activeTab === 'comunidade' && !isAdminGeral && !isOconomo && !isSuperior && isPadre) {
+      setActiveTab('individual');
+    }
+  }, [isAdminGeral, isOconomo, isSuperior, isPadre]);
 
   const isCommonPadre = isPadre && !isOconomo && !isSuperior;
   const isLocalAuthority = isOconomo || isSuperior;
@@ -61,12 +67,14 @@ const Financeiro: React.FC = () => {
 
       {!isCommonPadre && (
         <div className="view-mode-tabs" style={{ marginBottom: '20px' }}>
-          <button 
-            className={`mode-btn ${activeTab === 'individual' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('individual')}
-          >
-            {t('planilha.individual_title')}
-          </button>
+          {!isAdminGeral && (
+            <button 
+              className={`mode-btn ${activeTab === 'individual' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('individual')}
+            >
+              {t('planilha.individual_title')}
+            </button>
+          )}
           <button 
             className={`mode-btn ${activeTab === 'comunidade' ? 'active' : ''}`} 
             onClick={() => setActiveTab('comunidade')}
@@ -92,7 +100,7 @@ const Financeiro: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'individual' && <PlanilhaMensal casas={casas} categorias={categorias} />}
+      {activeTab === 'individual' && !isAdminGeral && <PlanilhaMensal casas={casas} categorias={categorias} />}
       {activeTab === 'comunidade' && (isAdminGeral || isLocalAuthority) && <PlanilhaComunidade casas={casas} categorias={categorias} />}
       {activeTab === 'planejamento' && isAdminGeral && <PlanejamentoOrcamentario casas={casas} categorias={categorias.filter(c => c.perfil === 'PLANEJAMENTO')} />}
       {activeTab === 'anual' && isAdminGeral && <PrestacaoContasAnual casas={casas} categorias={categorias.filter(c => c.perfil === 'ANUAL')} />}

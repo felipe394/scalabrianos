@@ -11,12 +11,12 @@
     },
     "menu": {
       "home": "Inicio",
-      "admin": "Administración",
+      "admin": "Gestión de la Plataforma",
       "profiles": "Perfiles (Admins)",
-      "missionaries": "Gestión de Misioneros",
+      "missionaries": "Misioneros / Seminaristas",
       "system_logs": "Logs del Sistema",
       "access_logs": "Logs de Acceso",
-      "houses": "Casas Religiosas",
+      "houses": "Presencia Misionera",
       "finance": "Gestión Financiera",
       "reports": "Reportes",
       "logout": "Salir"
@@ -25,10 +25,13 @@
       "overview": "Resumen",
       "loading": "Cargando tablero...",
       "stats": {
-        "total_members": "Total de Miembros",
-        "houses": "Casas Religiosas",
-        "docs": "Documentos Adjuntos",
-        "stages": "Etapas de Formación"
+        "total_members": "Total de Misioneros",
+        "houses": "Presencia Misionera",
+        "works": "Obras",
+        "parishes": "Parroquias / Iglesias",
+        "pastoral": "Pastoral / Vocacional",
+        "elderly_houses": "Casas de Ancianos",
+        "religious_seminarists": "Religiosos / Seminaristas"
       },
       "recent_activity": "Actividades Recientes",
       "quick_access": {
@@ -39,7 +42,7 @@
       }
     },
     "missionaries": {
-      "title": "Gestión de Misioneros",
+      "title": "Misioneros / Seminaristas",
       "new_btn": "+ Nuevo Misionero",
       "loading": "Cargando misioneros...",
       "error_loading": "Error al cargar misioneros",
@@ -65,17 +68,17 @@
       "wizard": {
         "title": "Nuevo Misionero",
         "steps": {
-          "civil": "Datos Civiles",
-          "address": "Dirección",
-          "religious": "Datos Religiosos",
-          "houses": "Casas",
+          "civil": "1. Datos Civiles",
+          "address": "2. Contactos",
+          "religious": "3. Datos Religiosos",
+          "houses": "Presencia Misionera",
           "access": "Acceso Login"
         },
         "civil": {
           "full_name": "Nombre Completo *",
           "birth_date": "Fecha de Nacimiento",
           "situation": "Situación",
-          "parents": "Filiación (Padres)",
+          "parents": "Nombre Padre / Nombre Madre",
           "birth_place_natural": "Naturalidad",
           "birth_place_city": "Ciudad / Estado (Nac.)",
           "country": "País",
@@ -115,12 +118,12 @@
           "is_superior": "Es Superior Local — cargo de liderazgo en la casa religiosa"
         },
         "houses": {
-          "hint": "Vincule al misionero con las casas religiosas donde actuará. El tiempo de permanencia máximo por casa es de 5 años.",
+          "hint": "Vincule al misionero a los frentes misioneros en los que actuará. El tiempo máximo de permanencia por casa es de 5 años.",
           "select_house": "Casa Religiosa",
           "start_date": "Fecha de Inicio",
           "is_superior": "Superior Local",
-          "bind_btn": "Vincular Casa",
-          "empty": "Aún no hay casas vinculadas.",
+          "bind_btn": "Vincular Presencia",
+          "empty": "Ninguna presencia vinculada aún.",
           "since": "desde",
           "max_perm_hint": "El tiempo de permanencia máximo en una casa es de 5 años."
         },
@@ -149,20 +152,21 @@
       "back_btn": "Atrás",
       "oconomo_badge": "Ecónomo",
       "superior_badge": "Superior Local",
+      "missionary_role": "Misionero",
       "tabs": {
-        "personal": "Datos Personales",
-        "contact": "Contacto y Dirección",
-        "religious": "Datos Religiosos",
-        "houses": "Casas"
+        "personal": "1. Datos Personales",
+        "contact": "2. Contactos",
+        "religious": "3. Datos Religiosos",
+        "houses": "Presencia Misionera"
       },
       "sections": {
-        "civil": "Datos Civiles",
+        "civil": "1. Datos Civiles",
         "docs": "Documentos y Adjuntos",
         "address": "Dirección",
-        "contact": "Contacto",
-        "religious": "Datos Religiosos",
-        "bind_house": "Vincular a una Casa",
-        "history_house": "Historial de Casas"
+        "contact": "2. Contacto",
+        "religious": "3. Datos Religiosos",
+        "bind_house": "Presencia Misionera",
+        "history_house": "Historial de Presencia"
       },
       "actions": {
         "save_civil": "Guardar Datos Civiles y Nacionalidades",
@@ -236,7 +240,7 @@
       }
     },
     "itinerary": {
-      "title": "Itinerario Formativo",
+      "title": "4. Itinerario Formativo",
       "sections": {
         "stages": "Etapas de Formación",
         "academic": "Formación Académica Adicional"
@@ -257,10 +261,10 @@
         "role": "PERFIL / CARGO"
       },
       "roles": {
-        "admin_geral": "Administrador General",
-        "admin": "Administrador",
-        "colaborador": "Colaborador",
-        "intermitente": "Intermitente"
+        "admin_geral": "Registro Regional",
+        "admin": "Superior Local",
+        "colaborador": "Ecônomo Local",
+        "intermitente": "Misionero"
       }
     },
     "logs": {

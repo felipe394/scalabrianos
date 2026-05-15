@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://scalabrinianos.dev.connectortech.com.br/api/';
 const api = axios.create({
-  baseURL: API_URL.endsWith('/') ? API_URL : `${API_URL}/`,
+  baseURL: API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL,
 });
 
 export const getFileUrl = (path: string | null) => {

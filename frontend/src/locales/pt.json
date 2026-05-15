@@ -11,32 +11,29 @@
     },
     "menu": {
       "home": "Home",
-      "admin": "Administração",
-      "profiles": "Perfis (Admins)",
-      "missionaries": "Cadastro de Missionário",
+      "admin": "Gestão da Plataforma",
+      "profiles": "Acesso - Permissões",
+      "missionaries": "Missionários / Seminaristas",
       "system_logs": "Logs do Sistema",
       "access_logs": "Logs de Acesso",
-      "houses": "Casas Religiosas",
-      "finance": "Gestão Financeira",
-      "reports": "Relatórios",
+      "houses": "Presença Missionária",
+      "finance": "Prestação de Contas",
+      "map": "Mapa RNSMM",
       "logout": "Sair"
     },
     "dashboard": {
       "overview": "Visão Geral",
       "loading": "Carregando dashboard...",
       "stats": {
-        "total_members": "Total de Membros",
-        "houses": "Casas Religiosas",
-        "docs": "Documentos Anexados",
-        "stages": "Etapas de Formação"
+        "total_members": "Total de missionários",
+        "houses": "Presença missionária",
+        "obras": "Obras",
+        "paroquias": "Paróquias / Igrejas",
+        "pastoral": "Pastoral / Vocacional",
+        "idosos": "Casas de Idosos",
+        "seminaristas": "Religiosos / Seminaristas"
       },
-      "recent_activity": "Atividades Recentes",
-      "quick_access": {
-        "title": "Acesso Rápido",
-        "validate_profiles": "Validar Perfis",
-        "new_reports": "Novos Relatórios",
-        "pendencies": "Pendências"
-      }
+      "recent_activity": "Atividades Recentes"
     },
     "missionaries": {
       "title": "Cadastro de Missionários",
@@ -44,7 +41,7 @@
       "loading": "Carregando missionários...",
       "error_loading": "Erro ao carregar missionários",
       "empty": "Nenhum missionário encontrado",
-      "search_placeholder": "Pesquisar por nome...",
+      "search_placeholder": "Pesquisar por nome, presença, cidade, país ou situação...",
       "filters": {
         "name": "BUSCAR POR NOME",
         "situation": "SITUAÇÃO",
@@ -65,17 +62,17 @@
       "wizard": {
         "title": "Novo Missionário",
         "steps": {
-          "civil": "Dados Civis",
-          "address": "Endereço",
-          "religious": "Dados Religiosos",
-          "houses": "Casas",
+          "civil": "1. Dados Civis",
+          "address": "2. Contatos",
+          "religious": "3. Dados Religiosos",
+          "houses": "Presença Missionária",
           "access": "Acesso Login"
         },
         "civil": {
           "full_name": "Nome Completo *",
           "birth_date": "Data de Nascimento",
           "situation": "Situação",
-          "parents": "Filiação (Pais)",
+          "parents": "Nome Pai / Nome Mãe",
           "birth_place_natural": "Naturalidade",
           "birth_place_city": "Cidade / Estado (Nasc.)",
           "country": "País",
@@ -115,12 +112,12 @@
           "is_superior": "É Superior Local — cargo de liderança na casa religiosa"
         },
         "houses": {
-          "hint": "Vincule o missionário às casas religiosas em que vai atuar. O tempo de permanência máximo por casa é 5 anos.",
+          "hint": "Vincule o missionário às frentes missionárias em que vai atuar. O tempo de permanência máximo por casa é 5 anos.",
           "select_house": "Casa Religiosa",
           "start_date": "Data de Início",
           "is_superior": "Superior Local",
-          "bind_btn": "Vincular Casa",
-          "empty": "Nenhuma casa vinculada ainda.",
+          "bind_btn": "Vincular Presença",
+          "empty": "Nenhuma presença vinculada ainda.",
           "since": "desde",
           "max_perm_hint": "O tempo de permanência máximo numa casa é de 5 anos."
         },
@@ -149,20 +146,21 @@
       "back_btn": "Voltar",
       "oconomo_badge": "Ecônomo",
       "superior_badge": "Superior Local",
+      "missionary_role": "Missionário",
       "tabs": {
-        "personal": "Dados Pessoais",
-        "contact": "Contato & Endereço",
-        "religious": "Dados Religiosos",
-        "houses": "Casas"
+        "personal": "1. Dados Civis",
+        "contact": "2. Contatos",
+        "religious": "3. Dados Religiosos",
+        "houses": "Presença Missionária"
       },
       "sections": {
-        "civil": "Dados Civis",
+        "civil": "1. Dados Civis",
         "docs": "Documentos & Anexos",
         "address": "Endereço",
-        "contact": "Contato",
-        "religious": "Dados Religiosos",
-        "bind_house": "Vincular a uma Casa",
-        "history_house": "Histórico de Casas"
+        "contact": "2. Contatos",
+        "religious": "3. Dados Religiosos",
+        "bind_house": "Presença Missionária",
+        "history_house": "Histórico de Presença"
       },
       "actions": {
         "save_civil": "Salvar Dados Civis e Nacionalidades",
@@ -210,18 +208,24 @@
       }
     },
     "casas": {
-      "title": "Casas Religiosas",
-      "error_loading": "Erro ao carregar casas religiosas",
+      "title": "Presença Missionária",
+      "error_loading": "Erro ao carregar presença missionária",
       "regional": "Regional",
       "reference_date": "Data Referência",
-      "new_house": "Nova Casa",
-      "edit_house": "Dados da Casa",
-      "name": "Nome da Casa",
-      "address": "Endereço",
+      "new_house": "Novo Cadastro",
+      "edit_house": "Dados da Presença",
+      "name": "Presença Missionária",
+      "address": "Residência / Endereço",
       "status": "Status",
+      "city": "Cidade",
+      "country": "País",
       "missionaries": "Missionários",
       "cost_registration": "Cadastro de Custos",
-      "regional_placeholder": "Ex: Sudeste"
+      "regional_placeholder": "Ex: Sudeste",
+      "paroco": "Pároco",
+      "vigario": "Vigário Paroquial",
+      "tipo": "Tipo",
+      "pm": "PM"
     },
     "reports": {
       "title": "Dashboard Analítico Financeiro",
@@ -237,7 +241,7 @@
       }
     },
     "itinerary": {
-      "title": "Itinerário Formativo",
+      "title": "4. Itinerário Formativo",
       "sections": {
         "stages": "Etapas de Formação",
         "academic": "Formação Acadêmica Adicional"
@@ -249,8 +253,8 @@
       }
     },
     "admins": {
-      "title": "Gestão de Administradores",
-      "new_btn": "+ Novo Administrador",
+      "title": "Gestão da Plataforma",
+      "new_btn": "+ Novo Cadastro",
       "modal_new": "Novo Administrador",
       "modal_edit": "Editar Administrador",
       "filters": {
@@ -258,10 +262,9 @@
         "role": "PERFIL / CARGO"
       },
       "roles": {
-        "admin_geral": "Administrador Geral",
-        "admin": "Administrador",
-        "colaborador": "Colaborador",
-        "intermitente": "Intermitente"
+        "admin_geral": "Registro Regional",
+        "colaborador": "Ecônomo Local",
+        "intermitente": "Superior Local"
       }
     },
     "logs": {
@@ -310,8 +313,8 @@
       "retry": "Tentar novamente"
     },
     "planilha": {
-      "individual_title": "Detalhamento Mensal",
-      "comunidade_title": "Prestação de Contas MENSAL - Comunidade",
+      "individual_title": "Prestação de Contas Mensal - Missionário",
+      "comunidade_title": "Prestação de Contas MENSAL - Casa Religiosa",
       "instruction_individual": "Preencha os valores para cada categoria abaixo.",
       "instruction_comunidade": "Preenchimento pelo ecônomo ou superior local.",
       "save_draft": "Salvar Rascunho",

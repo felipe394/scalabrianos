@@ -15,7 +15,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAdmin,
   requireManagement 
 }) => {
-  const { user, isAdminGeral, canEdit, isOconomo, isSuperior, isAuthenticated } = useAuth();
+  const { user, isAdminGeral, canEdit, isOconomo, isSuperior, isRegional, isPadre, isAuthenticated } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -27,8 +27,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/home" replace />;
   }
 
-  // Management check (Admin, Oconomo or Superior)
-  if (requireManagement && !isAdminGeral && !canEdit && !isOconomo && !isSuperior) {
+  // Management check (Admin, Oconomo, Superior or Padre)
+  if (requireManagement && !isAdminGeral && !canEdit && !isOconomo && !isSuperior && !isPadre && !isRegional) {
     return <Navigate to="/home" replace />;
   }
 

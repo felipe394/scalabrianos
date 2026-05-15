@@ -33,7 +33,7 @@ const Login: React.FC = () => {
 
       if (response.data.success) {
         login(response.data.user, response.data.token);
-        navigate('/home');
+        navigate('/missionarios');
       } else {
         setError(response.data.message || t('common.error'));
       }

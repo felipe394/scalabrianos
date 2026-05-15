@@ -22,6 +22,7 @@ interface Missionario {
   is_oconomo: boolean;
   is_superior: boolean;
   proximos_passos: string;
+  permissoes?: Record<string, boolean>;
 }
 
 interface ItineraryStage {
@@ -142,6 +143,14 @@ interface ContaBancaria {
   numero: string;
 }
 
+interface Contato {
+  parentesco: string;
+  nome: string;
+  endereco: string;
+  telefone: string;
+  email: string;
+}
+
 interface ObservacaoGeral {
   id: number;
   created_at: string;
@@ -175,12 +184,28 @@ function calcDuracao(dataInicio: string, dataFim?: string | null): string {
   return parts.length ? parts.join(' e ') : 'menos de 1 mês';
 }
 
+const PERMISSIONS_LIST = [
+  { id: 'dados_civis', label: '1. Dados Civis (visualização)' },
+  { id: 'contatos', label: '2. Contatos (visualização)' },
+  { id: 'dados_religiosos', label: '3. Dados Religiosos (visualização)' },
+  { id: 'itinerario_formativo', label: '4. Itinerário Formativo (Visualização)' },
+  { id: 'formacao_academica', label: '5. Formação Acadêmica (Visualização)' },
+  { id: 'atividade_missionaria', label: '6. Atividade Missionária (Visualização)' },
+  { id: 'saude', label: '7. Saúde (Visualização)' },
+  { id: 'previdenciario_ir', label: '8. Previdenciário/IR (Visualização)' },
+  { id: 'conta_bancaria', label: '9. Conta Bancária (Visualização)' },
+  { id: 'documentos', label: '10. Documentos (Visualização)' },
+  { id: 'obras_realizadas', label: '11. Obras realizadas (Visualização)' },
+  { id: 'observacoes', label: '12. Observações (Visualização)' },
+  { id: 'quadro_pessoal', label: '13. Quadro de Pessoal CV (Visualização)' },
+];
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const PerfilMissionario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canEdit } = useAuth();
+  const { canEdit, user: authUser, isAdminGeral, isOconomo, isSuperior, isRegional } = useAuth();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('dados');
 
@@ -214,7 +239,9 @@ const PerfilMissionario: React.FC = () => {
   const [obrasRealizadas, setObrasRealizadas] = useState<ObraRealizada[]>([]);
   const [saudeRecords, setSaudeRecords] = useState<SaudeRecord[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [contatos, setContatos] = useState<Contato[]>([]);
   const [observacoesGerais, setObservacoesGerais] = useState<ObservacaoGeral[]>([]);
+  const [quadroPessoal, setQuadroPessoal] = useState<QuadroPessoal | null>(null);
   const [nit, setNit] = useState('');
   const [situacaoData, setSituacaoData] = useState<SituacaoData>({
     data_falecimento: '', cidade_falecimento: '', certidao_obito_path: '', local_sepultamento: '',
@@ -233,7 +260,18 @@ const PerfilMissionario: React.FC = () => {
   void API_URL;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (id) fetchData(); }, [id]);
+  useEffect(() => { 
+    if (id) {
+      const isOwner = authUser?.id === parseInt(id);
+      const isManager = isAdminGeral || canEdit || isOconomo || isSuperior || isRegional;
+      
+      if (!isManager && !isOwner) {
+        navigate('/home');
+        return;
+      }
+      fetchData(); 
+    } 
+  }, [id, authUser, isAdminGeral, canEdit, isOconomo, isSuperior, isRegional]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -271,13 +309,14 @@ const PerfilMissionario: React.FC = () => {
       setNit(civRes.data?.nit || '');
 
       // Load new sections
-      const [fRes, aRes, oRes, sRes, bRes, obsRes] = await Promise.all([
+      const [fRes, aRes, oRes, sRes, bRes, obsRes, qRes] = await Promise.all([
         api.get(`/usuarios/${id}/formacao-academica`),
         api.get(`/usuarios/${id}/atividade-missionaria`),
         api.get(`/usuarios/${id}/obras-realizadas`),
         api.get(`/usuarios/${id}/saude`),
         api.get(`/usuarios/${id}/contas-bancarias`),
         api.get(`/usuarios/${id}/observacoes-gerais`),
+        api.get(`/usuarios/${id}/quadro-pessoal`),
       ]);
       setFormacaoAcademica(fRes.data);
       setAtividadesMissionarias(aRes.data);
@@ -285,6 +324,7 @@ const PerfilMissionario: React.FC = () => {
       setSaudeRecords(sRes.data);
       setContasBancarias(bRes.data);
       setObservacoesGerais(obsRes.data);
+      setQuadroPessoal(qRes.data[0] || null);
 
       const sitRes = await api.get(`/usuarios/${id}/situacao`);
       if (sitRes.data) setSituacaoData({
@@ -536,15 +576,25 @@ const PerfilMissionario: React.FC = () => {
   if (isLoading) return <div className="perfil-loading"><Loader2 className="animate-spin" size={40} /><p>{t('profile.loading')}</p></div>;
   if (!missionario) return <div className="perfil-loading"><AlertCircle size={40} /><p>{t('profile.not_found')}</p></div>;
 
-  const TABS = [
-      { key: 'dados', label: 'Dados & Contato', icon: <User size={16} /> },
-      { key: 'religiosos', label: 'Religioso & Itinerário', icon: <BookOpen size={16} /> },
-      { key: 'carreira', label: 'Formação & Missão', icon: <Activity size={16} /> },
-      { key: 'saude', label: 'Saúde & Financeiro', icon: <ShieldCheck size={16} /> },
-      { key: 'casas', label: t('profile.tabs.houses'), icon: <HomeIcon size={16} /> },
-      { key: 'acesso', label: 'Acesso', icon: <Lock size={16} /> },
-      { key: 'obs', label: 'Observações', icon: <FileText size={16} /> },
-    ];
+  const allTabs = [
+    { key: 'dados', label: '1. Dados Civis', icon: <User size={16} />, perm: 'dados_civis' },
+    { key: 'contatos', label: '2. Contatos', icon: <MapPin size={16} />, perm: 'contatos' },
+    { key: 'religiosos', label: '3. Dados Religiosos', icon: <BookOpen size={16} />, perm: 'dados_religiosos' },
+    { key: 'itinerario', label: '4. Itinerário Formativo', icon: <Activity size={16} />, perm: 'itinerario_formativo' },
+    { key: 'carreira', label: '5/6/11. Formação & Missão', icon: <GraduationCap size={16} />, perm: 'formacao_academica' },
+    { key: 'saude', label: '7-10. Saúde & Financeiro', icon: <ShieldCheck size={16} />, perm: 'saude' },
+    { key: 'casas', label: 'Presença Missionária', icon: <HomeIcon size={16} />, perm: null }, // Presença always visible for admins
+    { key: 'acesso', label: 'Acesso', icon: <Lock size={16} />, perm: null },
+    { key: 'obs', label: '12. Observações', icon: <FileText size={16} />, perm: 'observacoes' },
+    { key: 'permissoes', label: 'Permissões', icon: <ShieldCheck size={16} />, perm: null },
+  ];
+
+  // Filter tabs for PADRE role (Missionary)
+  const TABS = allTabs.filter(tab => {
+    if (isAdminGeral || (canEdit && authUser?.id !== missionario.id)) return true;
+    if (!tab.perm) return true; // Always show tabs without specific permission requirements
+    return !!missionario.permissoes?.[tab.perm];
+  });
 
     return (
       <div className="page-container">
@@ -556,13 +606,34 @@ const PerfilMissionario: React.FC = () => {
         </div>
 
         <div className="perfil-top-card">
-          <div className="perfil-avatar">{missionario.nome.charAt(0)}</div>
+          <div className="perfil-avatar-wrapper">
+             <div className="perfil-avatar">{missionario.nome.charAt(0)}</div>
+             <div className={`perfil-status-dot ${(missionario.situacao || '').toLowerCase()}`}></div>
+          </div>
           <div className="perfil-main-info">
-            <h1>{missionario.nome}</h1>
-            <div className="perfil-badges">
-              <span className={`situacao-tag ${(missionario.situacao || '').toLowerCase()}`}>{missionario.situacao}</span>
-              {missionario.is_oconomo && <span className="cargo-badge oconomo"><ShieldCheck size={12} /> {t('profile.oconomo_badge')}</span>}
-              {missionario.is_superior && <span className="cargo-badge superior"><Star size={12} /> {t('profile.superior_badge')}</span>}
+            <div className="perfil-name-section">
+               <h1>{missionario.nome}</h1>
+               <span className={`situacao-tag-premium ${(missionario.situacao || '').toLowerCase()}`}>
+                  {missionario.situacao}
+               </span>
+            </div>
+            <div className="perfil-badges-row">
+               <div className="perfil-badge-item">
+                  <User size={14} />
+                  <span>{t('profile.missionary_role')}</span>
+               </div>
+               {!!missionario.is_oconomo && (
+                  <div className="perfil-badge-item oconomo">
+                     <ShieldCheck size={14} />
+                     <span>{t('profile.oconomo_badge')}</span>
+                  </div>
+               )}
+               {!!missionario.is_superior && (
+                  <div className="perfil-badge-item superior">
+                     <Star size={14} />
+                     <span>{t('profile.superior_badge')}</span>
+                  </div>
+               )}
             </div>
           </div>
         </div>
@@ -576,11 +647,11 @@ const PerfilMissionario: React.FC = () => {
         </div>
 
         <div className="perfil-content">
-          {/* --- DADOS PESSOAIS & CONTATO --- */}
+          {/* --- 1. DADOS CIVIS --- */}
           {activeTab === 'dados' && (
             <div className="tab-panel">
               <div className="section-card">
-                <h3 className="section-title"><User size={16} /> {t('profile.sections.civil')}</h3>
+                <h3 className="section-title"><User size={16} /> 1. Dados Civis</h3>
                 <div className="form-grid-3">
 
                   {/* Data de Nascimento */}
@@ -669,7 +740,9 @@ const PerfilMissionario: React.FC = () => {
 
                   {/* RNM — até 9 dígitos */}
                   <div className="form-group">
-                    <label>RNM</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      RG / RNM / CI / DI <FileText size={14} style={{ opacity: 0.5 }} />
+                    </label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -682,14 +755,13 @@ const PerfilMissionario: React.FC = () => {
                       disabled={!canEdit}
                       placeholder="000000000"
                     />
-                    <span className={`field-hint ${(civilData.rnm?.length || 0) === 9 ? 'ok' : ''}`}>
-                      Somente números · {civilData.rnm?.length || 0}/9 dígitos
-                    </span>
                   </div>
 
                   {/* CPF — exatamente 11 dígitos */}
                   <div className="form-group">
-                    <label>CPF</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      CPF <FileText size={14} style={{ opacity: 0.5 }} />
+                    </label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -702,14 +774,13 @@ const PerfilMissionario: React.FC = () => {
                       disabled={!canEdit}
                       placeholder="00000000000"
                     />
-                    <span className={`field-hint ${(civilData.cpf?.length || 0) === 11 ? 'ok' : (civilData.cpf?.length || 0) > 0 ? 'warn' : ''}`}>
-                      {(civilData.cpf?.length || 0) === 11 ? '✓ CPF completo (11 dígitos)' : `Exatamente 11 dígitos · ${civilData.cpf?.length || 0}/11`}
-                    </span>
                   </div>
 
                   {/* Título de Eleitor — exatamente 12 dígitos */}
                   <div className="form-group">
-                    <label>Título Eleitor</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      Título Eleitor <FileText size={14} style={{ opacity: 0.5 }} />
+                    </label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -722,14 +793,13 @@ const PerfilMissionario: React.FC = () => {
                       disabled={!canEdit}
                       placeholder="000000000000"
                     />
-                    <span className={`field-hint ${(civilData.titulo_eleitor?.length || 0) === 12 ? 'ok' : (civilData.titulo_eleitor?.length || 0) > 0 ? 'warn' : ''}`}>
-                      {(civilData.titulo_eleitor?.length || 0) === 12 ? '✓ Completo (12 dígitos)' : `Exatamente 12 dígitos · ${civilData.titulo_eleitor?.length || 0}/12`}
-                    </span>
                   </div>
 
                   {/* CNH — exatamente 11 dígitos */}
                   <div className="form-group">
-                    <label>CNH</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      CNH <FileText size={14} style={{ opacity: 0.5 }} />
+                    </label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -742,14 +812,13 @@ const PerfilMissionario: React.FC = () => {
                       disabled={!canEdit}
                       placeholder="00000000000"
                     />
-                    <span className={`field-hint ${(civilData.cnh?.length || 0) === 11 ? 'ok' : (civilData.cnh?.length || 0) > 0 ? 'warn' : ''}`}>
-                      {(civilData.cnh?.length || 0) === 11 ? '✓ CNH completo (11 dígitos)' : `Exatamente 11 dígitos · ${civilData.cnh?.length || 0}/11`}
-                    </span>
                   </div>
 
                   {/* Passaporte — alfanumérico, até 9 chars, letras maiúsculas */}
                   <div className="form-group">
-                    <label>Passaporte</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      Passaporte <FileText size={14} style={{ opacity: 0.5 }} />
+                    </label>
                     <input
                       type="text"
                       value={civilData.passaporte}
@@ -762,9 +831,6 @@ const PerfilMissionario: React.FC = () => {
                       placeholder="AA000000"
                       style={{ fontFamily: 'monospace', letterSpacing: '2px' }}
                     />
-                    <span className={`field-hint ${(civilData.passaporte?.length || 0) >= 6 ? 'ok' : (civilData.passaporte?.length || 0) > 0 ? 'warn' : ''}`}>
-                      Letras e números · {civilData.passaporte?.length || 0}/9 · automático maiúsculo
-                    </span>
                   </div>
 
                 </div>
@@ -799,27 +865,7 @@ const PerfilMissionario: React.FC = () => {
                 )}
               </div>
 
-              <div className="section-card">
-                <h3 className="section-title"><MapPin size={16} /> {t('profile.sections.address')} & {t('profile.sections.contact')}</h3>
-                <div className="form-grid-3">
-                  <div className="form-group"><label>{t('missionaries.wizard.address.cep')} {cepLoading && <Loader2 size={12} className="animate-spin" />}</label><input type="text" value={enderecoData.cep} onChange={e => handleCepChange(e.target.value)} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.neighborhood')}</label><input type="text" value={enderecoData.bairro} onChange={e => setEnderecoData({ ...enderecoData, bairro: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group full"><label>{t('missionaries.wizard.address.street')}</label><input type="text" value={enderecoData.logradouro} onChange={e => setEnderecoData({ ...enderecoData, logradouro: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.complement')}</label><input type="text" value={enderecoData.complemento} onChange={e => setEnderecoData({ ...enderecoData, complemento: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.city_state')}</label><input type="text" value={enderecoData.cidade_estado} onChange={e => setEnderecoData({ ...enderecoData, cidade_estado: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.cellphone')}</label><input type="text" value={enderecoData.celular_whatsapp} onChange={e => setEnderecoData({ ...enderecoData, celular_whatsapp: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.phone')}</label><input type="text" value={enderecoData.telefone_fixo} onChange={e => setEnderecoData({ ...enderecoData, telefone_fixo: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.address.personal_email')}</label><input type="email" value={enderecoData.email_pessoal} onChange={e => setEnderecoData({ ...enderecoData, email_pessoal: e.target.value })} disabled={!canEdit} /></div>
-                </div>
-                {canEdit && (
-                  <div className="section-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-save-perfil" onClick={saveEndereco} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      {t('profile.actions.save_address')}
-                    </button>
-                  </div>
-                )}
-              </div>
+
 
               {/* Seção de Documentos dentro da aba Dados */}
               <div className="section-card docs-section">
@@ -891,6 +937,127 @@ const PerfilMissionario: React.FC = () => {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* --- 2. CONTATOS --- */}
+          {activeTab === 'contatos' && (
+            <div className="tab-panel">
+              <div className="section-card">
+                <div className="section-header-flex">
+                  <h3 className="section-title"><MapPin size={16} /> 2. Contatos</h3>
+                  {canEdit && contatos.length < 3 && (
+                    <button className="btn-action-lite-text" onClick={() => setContatos([...contatos, { parentesco: '', nome: '', endereco: '', telefone: '', email: '' }])}>
+                      <Plus size={16} /> Adicionar Contato
+                    </button>
+                  )}
+                </div>
+                
+                <div className="contatos-list" style={{ marginTop: '20px' }}>
+                  {contatos.length === 0 && (
+                    <p style={{ opacity: 0.6, textAlign: 'center', padding: '20px' }}>Nenhum contato cadastrado. Adicione até 3 contatos.</p>
+                  )}
+                  {contatos.map((contato, idx) => (
+                    <div key={idx} className="contato-item-premium" style={{ 
+                      padding: '20px', 
+                      background: '#f8fafc', 
+                      borderRadius: '12px', 
+                      marginBottom: '20px',
+                      border: '1px solid #e2e8f0',
+                      position: 'relative'
+                    }}>
+                      <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                        {canEdit && (
+                          <button className="btn-action-lite delete" onClick={() => setContatos(contatos.filter((_, i) => i !== idx))}>
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="form-grid-3">
+                        <div className="form-group">
+                          <label>Nome Pai</label>
+                          <input 
+                            type="text" 
+                            placeholder="Nome do pai..." 
+                            value={contato.parentesco} 
+                            onChange={e => {
+                              const newC = [...contatos];
+                              newC[idx].parentesco = e.target.value;
+                              setContatos(newC);
+                            }}
+                            disabled={!canEdit}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Nome Mãe</label>
+                          <input 
+                            type="text" 
+                            placeholder="Nome da mãe..." 
+                            value={contato.nome} 
+                            onChange={e => {
+                              const newC = [...contatos];
+                              newC[idx].nome = e.target.value;
+                              setContatos(newC);
+                            }}
+                            disabled={!canEdit}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Telefone</label>
+                          <input 
+                            type="text" 
+                            placeholder="(00) 00000-0000" 
+                            value={contato.telefone} 
+                            onChange={e => {
+                              const newC = [...contatos];
+                              newC[idx].telefone = e.target.value;
+                              setContatos(newC);
+                            }}
+                            disabled={!canEdit}
+                          />
+                        </div>
+                        <div className="form-group full">
+                          <label>Endereço</label>
+                          <input 
+                            type="text" 
+                            placeholder="Endereço completo..." 
+                            value={contato.endereco} 
+                            onChange={e => {
+                              const newC = [...contatos];
+                              newC[idx].endereco = e.target.value;
+                              setContatos(newC);
+                            }}
+                            disabled={!canEdit}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>E-mail</label>
+                          <input 
+                            type="email" 
+                            placeholder="email@exemplo.com" 
+                            value={contato.email} 
+                            onChange={e => {
+                              const newC = [...contatos];
+                              newC[idx].email = e.target.value;
+                              setContatos(newC);
+                            }}
+                            disabled={!canEdit}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {canEdit && (
+                  <div className="section-actions" style={{ marginTop: '20px' }}>
+                    <button className="btn-save-perfil" onClick={saveEndereco} disabled={isSaving}>
+                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                      Salvar Contatos
+                    </button>
                   </div>
                 )}
               </div>
@@ -1055,7 +1222,12 @@ const PerfilMissionario: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
+          {/* --- 4. ITINERÁRIO FORMATIVO --- */}
+          {activeTab === 'itinerario' && (
+            <div className="tab-panel">
               <div className="section-card">
                 <h3 className="section-title"><Activity size={16} /> 4. Itinerário Formativo</h3>
                 <div className="itinerary-full-grid">
@@ -1230,6 +1402,48 @@ const PerfilMissionario: React.FC = () => {
                   {obrasRealizadas.length === 0 && <p className="empty-msg">Nenhuma obra registrada.</p>}
                 </div>
               </div>
+
+              {/* --- 13. QUADRO DE PESSOAL CV --- */}
+              <div className="section-card">
+                <div className="section-header-flex">
+                  <h3 className="section-title"><ShieldCheck size={16} /> 13. Quadro de Pessoal CV</h3>
+                  {canEdit && (
+                    <button className="btn-action-lite-text" onClick={() => {
+                      setTempForm({
+                        funcao_atual: quadroPessoal?.funcao_atual || '',
+                        competencias: quadroPessoal?.competencias || '',
+                        cv_path: quadroPessoal?.cv_path || ''
+                      });
+                      setShowAddForm('quadro');
+                    }}>
+                      <Plus size={14} /> {quadroPessoal ? 'Editar' : 'Adicionar'}
+                    </button>
+                  )}
+                </div>
+                {quadroPessoal ? (
+                  <div className="list-item-card-premium">
+                    <div className="item-icon-container" style={{ background: '#eff6ff', color: '#1d4ed8', padding: '10px', borderRadius: '10px' }}>
+                      <Users size={20} />
+                    </div>
+                    <div className="item-main-content">
+                      <strong>Função Atual: {quadroPessoal.funcao_atual}</strong>
+                      <div className="item-description" style={{ marginTop: '10px' }}>
+                        <strong>Competências/Resumo:</strong>
+                        <p>{quadroPessoal.competencias}</p>
+                      </div>
+                    </div>
+                    <div className="item-actions-premium">
+                      {quadroPessoal.cv_path && (
+                        <a href={getFileUrl(quadroPessoal.cv_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Ver CV">
+                          <Eye size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-msg">Nenhuma informação de quadro de pessoal registrada.</p>
+                )}
+              </div>
             </div>
           )}
 
@@ -1302,7 +1516,7 @@ const PerfilMissionario: React.FC = () => {
             <div className="tab-panel">
               {canEdit && (
                 <div className="section-card">
-                  <h3 className="section-title"><Plus size={16} /> {t('profile.sections.bind_house')}</h3>
+                  <h3 className="section-title"><Plus size={16} /> Presença Missionária</h3>
                   <div className="form-grid-3">
                     <div className="form-group">
                       <label>{t('missionaries.wizard.houses.select_house')}</label>
@@ -1324,7 +1538,7 @@ const PerfilMissionario: React.FC = () => {
                 </div>
               )}
               <div className="section-card">
-                <h3 className="section-title"><HomeIcon size={16} /> {t('profile.sections.history_house')}</h3>
+                <h3 className="section-title"><HomeIcon size={16} /> Histórico de Presença</h3>
                 <div className="casas-list">
                   {casasHistorico.map(c => (
                     <div key={c.id} className={`casa-item ${!c.data_fim ? 'casa-ativa' : ''}`}>
@@ -1372,7 +1586,56 @@ const PerfilMissionario: React.FC = () => {
             </div>
           )}
 
-          <input type="file" ref={itinFileInputRef} className="hidden" onChange={(e) => activeEtapaRef.current && handleItinDocUpload(e, activeEtapaRef.current)} />
+          {/* --- PERMISSÕES --- */}
+          {activeTab === 'permissoes' && (
+            <div className="tab-panel">
+              <div className="section-card">
+                <h3 className="section-title"><ShieldCheck size={16} /> Permissões de Visualização</h3>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '20px' }}>
+                   Abaixo estão as seções do cadastro que este missionário tem permissão para visualizar no seu próprio perfil.
+                </p>
+                
+                <div style={{ background: '#f8fafc', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                    {PERMISSIONS_LIST.map(perm => {
+                      const isGranted = !!missionario.permissoes?.[perm.id];
+                      return (
+                        <div key={perm.id} style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '12px', 
+                          padding: '12px', 
+                          background: 'white', 
+                          borderRadius: '8px',
+                          border: `1px solid ${isGranted ? '#10b981' : '#e2e8f0'}`,
+                          opacity: isGranted ? 1 : 0.6
+                        }}>
+                          {isGranted ? (
+                            <CheckCircle size={18} style={{ color: '#10b981' }} />
+                          ) : (
+                            <Lock size={18} style={{ color: '#94a3b8' }} />
+                          )}
+                          <span style={{ 
+                            fontSize: '0.85rem', 
+                            fontWeight: isGranted ? 600 : 400,
+                            color: isGranted ? '#0f172a' : '#64748b'
+                          }}>
+                            {perm.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                {(isAdminGeral || canEdit) && (
+                   <div style={{ marginTop: '20px', padding: '15px', background: '#eff6ff', borderRadius: '8px', color: '#1e40af', fontSize: '0.85rem' }}>
+                      <strong>Nota de Administrador:</strong> Você pode alterar estas permissões na tela de <a href="/administradores" style={{ color: '#013375', fontWeight: 700 }}>Gestão de Acessos</a> ou editando o cadastro do missionário.
+                   </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* --- MODAL --- */}
           {showAddForm && (
@@ -1416,6 +1679,18 @@ const PerfilMissionario: React.FC = () => {
                       <div className="form-group"><label>Número Conta</label><input type="text" onChange={e => setTempForm({ ...tempForm, numero: e.target.value })} /></div>
                     </>
                   )}
+                  {showAddForm === 'quadro' && (
+                    <>
+                      <div className="form-group"><label>Função Atual</label><input type="text" value={tempForm.funcao_atual || ''} onChange={e => setTempForm({ ...tempForm, funcao_atual: e.target.value })} /></div>
+                      <div className="form-group"><label>Competências / Resumo</label><textarea rows={4} value={tempForm.competencias || ''} onChange={e => setTempForm({ ...tempForm, competencias: e.target.value })} /></div>
+                      <div className="form-group">
+                        <label>CV / Documento (PDF ou JPEG)</label>
+                        <div className="file-input-wrapper">
+                          <input type="file" onChange={e => uploadGenericDoc(e, 'quadro-pessoal')} />
+                        </div>
+                      </div>
+                    </>
+                  )}
                   {showAddForm === 'obs' && (
                     <div className="form-group"><label>Texto da Observação</label><textarea rows={6} onChange={e => setTempForm({ ...tempForm, texto: e.target.value })} /></div>
                   )}
@@ -1428,7 +1703,8 @@ const PerfilMissionario: React.FC = () => {
                         showAddForm === 'obras' ? 'obras-realizadas' :
                           showAddForm === 'saude' ? 'saude' :
                             showAddForm === 'banco' ? 'contas-bancarias' :
-                              showAddForm === 'obs' ? 'observacoes-gerais' : '';
+                              showAddForm === 'obs' ? 'observacoes-gerais' :
+                              showAddForm === 'quadro' ? 'quadro-pessoal' : '';
                     handleGenericAdd(endpoint, tempForm);
                   }}>Confirmar</button>
                 </div>

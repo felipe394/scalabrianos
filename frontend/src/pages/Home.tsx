@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, Home as HouseIcon, FileText, Activity,
-  UserCheck, UserMinus, Loader2, DollarSign, AlertCircle, ArrowRight
+  UserCheck, UserMinus, Loader2, DollarSign, AlertCircle, ArrowRight, MapPin, Phone, Mail, Globe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -40,18 +40,14 @@ const Home: React.FC = () => {
     }
   };
 
-  const stats = statsData?.isMissionary 
-    ? [
-        { label: 'Sua Casa Atual', value: statsData.houseName || '---', icon: <HouseIcon size={24} />, color: '#013375' },
-        { label: 'Status Financeiro (Mês)', value: statsData.spreadsheetStatus || 'N/A', icon: <FileText size={24} />, color: statsData.spreadsheetStatus === 'VALIDADO' ? '#10b981' : '#f59e0b' },
-        { label: 'Notificações', value: (statsData.recentActivities?.length || 0).toString(), icon: <Activity size={24} />, color: '#013375' },
-      ]
-    : [
-        { label: t('dashboard.stats.total_members'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375' },
-        { label: t('dashboard.stats.houses'), value: statsData?.totalHouses?.toString() || '0', icon: <HouseIcon size={24} />, color: '#013375' },
-        { label: t('dashboard.stats.docs'), value: '458', icon: <FileText size={24} />, color: '#013375' },
-        { label: t('dashboard.stats.stages'), value: statsData?.totalItineraries?.toString() || '0', icon: <Activity size={24} />, color: '#013375' },
-      ];
+  const stats = [
+    { label: t('dashboard.stats.total_members'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.obras'), value: '12', icon: <HouseIcon size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.paroquias'), value: '25', icon: <HouseIcon size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.pastoral'), value: '8', icon: <Activity size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.idosos'), value: '5', icon: <HouseIcon size={24} />, color: '#013375' },
+    { label: t('dashboard.stats.seminaristas'), value: statsData?.totalUsers?.toString() || '0', icon: <Users size={24} />, color: '#013375', path: '/itinerario-formativo' },
+  ];
 
   if (isLoading) {
     return (
@@ -70,50 +66,14 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {statsData?.isMissionary && statsData?.spreadsheetStatus === 'DEVOLVIDO' && (
-        <div className="alert-banner-returned" style={{ 
-          background: '#fee2e2', 
-          border: '1px solid #ef4444', 
-          padding: '16px', 
-          borderRadius: '12px', 
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          color: '#b91c1c'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <AlertCircle size={24} />
-            <div>
-              <h4 style={{ margin: 0, fontWeight: 700 }}>Planilha Devolvida para Revisão</h4>
-              <p style={{ margin: '4px 0 0', fontSize: '14px', opacity: 0.9 }}>
-                O ecônomo solicitou alterações na sua planilha do mês atual. Por favor, revise os comentários e re-submeta.
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={() => navigate('/financeiro')}
-            style={{ 
-              background: '#ef4444', 
-              color: 'white', 
-              border: 'none', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            Corrigir Agora <ArrowRight size={18} />
-          </button>
-        </div>
-      )}
-
-      <div className="stats-grid">
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         {stats.map((stat, index) => (
-          <div key={index} className="stat-card">
+          <div 
+            key={index} 
+            className="stat-card" 
+            style={{ cursor: stat.path ? 'pointer' : 'default' }}
+            onClick={() => stat.path && navigate(stat.path)}
+          >
             <div className="stat-icon" style={{ color: stat.color }}>
               {stat.icon}
             </div>
@@ -125,8 +85,42 @@ const Home: React.FC = () => {
         ))}
       </div>
 
-      <div className="dashboard-content">
-        <div className="activity-section">
+      <div className="dashboard-content" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+        <div className="map-section card-lite" style={{ padding: '0', overflow: 'hidden', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+          <div className="section-header" style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Globe size={20} className="text-primary" /> Sede Regional RNSMM
+            </h3>
+          </div>
+          <div className="map-container" style={{ flex: 1, position: 'relative' }}>
+            <iframe
+                title="Google Maps Sede RNSMM Home"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                style={{ border: 0, minHeight: '350px' }}
+                src={`https://maps.google.com/maps?q=${encodeURIComponent("R. Dr. Mário Vicente, 1108 - Ipiranga, São Paulo - SP")}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                allowFullScreen
+            ></iframe>
+          </div>
+          <div style={{ padding: '15px 24px', background: '#f8fafc', fontSize: '13px', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>R. Dr. Mário Vicente, 1108 - Ipiranga, São Paulo - SP, 04270-001</span>
+              <button 
+                  onClick={() => navigate('/mapa')}
+                  style={{ background: 'none', border: 'none', color: '#013375', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                  Ver Detalhes <ArrowRight size={14} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '20px', fontSize: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={12} /> +55 11 97286-1612</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={12} /> faleconosco@scalabrinianos.com</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="activity-section card-lite" style={{ padding: '24px' }}>
           <div className="section-header">
             <h3>{t('dashboard.recent_activity')}</h3>
           </div>
@@ -142,37 +136,6 @@ const Home: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div className="quick-access">
-          <div className="section-header">
-            <h3>{t('dashboard.quick_access.title')}</h3>
-          </div>
-          <div className="quick-grid">
-            {statsData?.isMissionary ? (
-               <>
-                 <button className="quick-btn" onClick={() => navigate('/financeiro')}>
-                   <DollarSign size={20} />
-                   <span>Preencher Planilha</span>
-                 </button>
-               </>
-            ) : (
-              <>
-                <button className="quick-btn" onClick={() => navigate('/missionarios')}>
-                  <UserCheck size={20} />
-                  <span>{t('dashboard.quick_access.validate_profiles')}</span>
-                </button>
-                <button className="quick-btn" onClick={() => navigate('/financeiro')}>
-                  <FileText size={20} />
-                  <span>{t('dashboard.quick_access.new_reports')}</span>
-                </button>
-              </>
-            )}
-            <button className="quick-btn warning">
-              <UserMinus size={20} />
-              <span>{t('dashboard.quick_access.pendencies')}</span>
-            </button>
           </div>
         </div>
       </div>
