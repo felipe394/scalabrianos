@@ -288,7 +288,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
         ) : (
           <>
             <div className="insertion-fields-card" style={{ marginBottom: '20px', padding: '24px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
           {/* RECEITA COL */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <span style={{ fontWeight: 800, color: '#166534', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -308,8 +308,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
               <div style={{ position: 'relative', flex: '0 0 120px' }}>
                 <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   placeholder="0,00"
                   style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
                   value={tempReceitaVal}
@@ -351,8 +350,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
               <div style={{ position: 'relative', flex: '0 0 120px' }}>
                 <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   placeholder="0,00"
                   style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
                   value={tempDespesaVal}
@@ -398,12 +396,12 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                       <div style={{ width: '110px', textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 8px', width: '100px' }}>
                           <input
-                            type="number"
-                            step="0.01"
-                            value={editValues[cat.id] || 0}
+                            type="text"
+                            value={(editValues[cat.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             onChange={e => {
-                              const val = parseFloat(e.target.value);
-                              setEditValues({ ...editValues, [cat.id]: isNaN(val) ? 0 : val });
+                              const val = e.target.value.replace(/\./g, '').replace(',', '.');
+                              const num = parseFloat(val);
+                              setEditValues({ ...editValues, [cat.id]: isNaN(num) ? 0 : num });
                             }}
                             style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 700, fontSize: '12px', color: '#0f172a', outline: 'none' }}
                           />
@@ -438,12 +436,12 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                       <div style={{ width: '110px', textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 8px', width: '100px' }}>
                           <input
-                            type="number"
-                            step="0.01"
-                            value={editValues[cat.id] || 0}
+                            type="text"
+                            value={(editValues[cat.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             onChange={e => {
-                              const val = parseFloat(e.target.value);
-                              setEditValues({ ...editValues, [cat.id]: isNaN(val) ? 0 : val });
+                              const val = e.target.value.replace(/\./g, '').replace(',', '.');
+                              const num = parseFloat(val);
+                              setEditValues({ ...editValues, [cat.id]: isNaN(num) ? 0 : num });
                             }}
                             style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 700, fontSize: '12px', color: '#0f172a', outline: 'none' }}
                           />

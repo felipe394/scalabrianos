@@ -608,8 +608,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
               <div style={{ position: 'relative', flex: '0 0 120px' }}>
                 <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   placeholder="0,00"
                   style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
                   value={tempReceitaVal}
@@ -651,8 +650,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
               <div style={{ position: 'relative', flex: '0 0 120px' }}>
                 <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   placeholder="0,00"
                   style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
                   value={tempDespesaVal}
