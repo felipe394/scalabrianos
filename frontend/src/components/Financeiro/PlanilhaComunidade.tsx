@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< HEAD
-import { Save, Loader2, Calendar, FileText, Download } from 'lucide-react';
-=======
 import {
   Save, Loader2, CheckCircle, XCircle, AlertCircle,
   Calendar, FileText, Download, TrendingUp, TrendingDown, Plus
 } from 'lucide-react';
->>>>>>> 84f1922 (🚀:Rebuild das telas principais)
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
