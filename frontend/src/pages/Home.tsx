@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, Home as HouseIcon, FileText, Activity,
-  UserCheck, UserMinus, Loader2, DollarSign, AlertCircle, ArrowRight, MapPin, Phone, Mail, Globe
+  Users, Home as HouseIcon, Activity,
+  Loader2, ArrowRight, Phone, Mail, Globe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';

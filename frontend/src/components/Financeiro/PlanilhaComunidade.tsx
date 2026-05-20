@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Save, Loader2, CheckCircle, XCircle, AlertCircle,
+  Save, Loader2,
   Calendar, FileText, Download, TrendingUp, TrendingDown, Plus
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -42,7 +42,7 @@ interface Props {
 
 const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
   const { t } = useTranslation();
-  const { user, isAdminGeral } = useAuth();
+  const { user } = useAuth();
   const [selectedMes, setSelectedMes] = useState(new Date().toISOString().slice(0, 7));
   const [selectedCasa, setSelectedCasa] = useState('');
   const [planilha, setPlanilha] = useState<PlanilhaData | null>(null);

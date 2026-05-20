@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Info, Globe, Building, Users, Heart, Phone, Mail, ExternalLink, Loader2, Home as HouseIcon, Activity, Star, School } from 'lucide-react';
+import { Info, Globe, Building, Users, Heart, ExternalLink, Loader2, Home as HouseIcon, Activity, Star, School } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';

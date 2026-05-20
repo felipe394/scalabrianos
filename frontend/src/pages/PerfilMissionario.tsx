@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, MapPin, BookOpen, Home as HomeIcon, Loader2, AlertCircle,
   Save, Trash2, Plus, Star, FileText, Download, ShieldCheck, Eye,
-  Activity, ChevronLeft, DollarSign, GraduationCap, Upload, Lock
+  Activity, ChevronLeft, DollarSign, GraduationCap, Upload, Lock,
+  Users, CheckCircle
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -169,6 +170,12 @@ interface CasaHistorico {
 
 interface Casa { id: number; nome: string; }
 
+interface QuadroPessoal {
+  funcao_atual?: string;
+  competencias?: string;
+  cv_path?: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function calcDuracao(dataInicio: string, dataFim?: string | null): string {
@@ -219,7 +226,7 @@ const PerfilMissionario: React.FC = () => {
   const [casasDisponiveis, setCasasDisponiveis] = useState<Casa[]>([]);
   const [novaVinculacao, setNovaVinculacao] = useState({ casa_id: '', data_inicio: '', data_fim: '', funcao: '', is_superior: false });
   const [isSaving, setIsSaving] = useState(false);
-  const [cepLoading, setCepLoading] = useState(false);
+  // const [cepLoading, setCepLoading] = useState(false);
   const [nacionalidades, setNacionalidades] = useState<string[]>([]);
 
   // Documents state
@@ -230,7 +237,7 @@ const PerfilMissionario: React.FC = () => {
   // Itinerary state
   const [itinerarioStages, setItinerarioStages] = useState<ItineraryStage[]>([]);
   const [isSavingItinerary, setIsSavingItinerary] = useState(false);
-  const [_itinDocUploading, setItinDocUploading] = useState<number | null>(null);
+  // const [_itinDocUploading, setItinDocUploading] = useState<number | null>(null);
   const itinFileInputRef = useRef<HTMLInputElement>(null);
   const activeEtapaRef = useRef<string | null>(null);
   // New Sections State
@@ -252,7 +259,7 @@ const PerfilMissionario: React.FC = () => {
 
   // Forms for adding
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
-  const [tempForm, setTempForm] = useState<Record<string, unknown>>({});
+  const [tempForm, setTempForm] = useState<Record<string, any>>({});
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -340,6 +347,7 @@ const PerfilMissionario: React.FC = () => {
     }
   };
 
+  /*
   const handleCepChange = async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
     setEnderecoData(prev => ({ ...prev, cep }));
@@ -357,10 +365,11 @@ const PerfilMissionario: React.FC = () => {
             cidade_estado: `${data.localidade} - ${data.uf}`
           }));
         }
-      } catch { /* erro silencioso */ }
+      } catch { }
       finally { setCepLoading(false); }
     }
   };
+  */
 
   const saveCivil = async () => {
     setIsSaving(true);
@@ -523,6 +532,7 @@ const PerfilMissionario: React.FC = () => {
     finally { setIsSaving(false); }
   };
 
+  /*
   const handleItinDocUpload = async (e: React.ChangeEvent<HTMLInputElement>, etapa: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -552,9 +562,10 @@ const PerfilMissionario: React.FC = () => {
       setItinDocUploading(null);
     }
   };
+  */
 
 
-  const handleGenericAdd = async (endpoint: string, data: Record<string, unknown>) => {
+  const handleGenericAdd = async (endpoint: string, data: Record<string, any>) => {
     setIsSaving(true);
     try {
       await api.post(`/usuarios/${id}/${endpoint}`, data);
@@ -562,6 +573,25 @@ const PerfilMissionario: React.FC = () => {
       setTempForm({});
       fetchData();
     } catch { alert('Erro ao salvar registro'); }
+    finally { setIsSaving(false); }
+  };
+
+  const uploadGenericDoc = async (e: React.ChangeEvent<HTMLInputElement>, endpoint: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    formData.append('descricao', `Documento ${endpoint}`);
+
+    setIsSaving(true);
+    try {
+      const res = await api.post(`/usuarios/${id}/documentos`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setTempForm(prev => ({ ...prev, cv_path: res.data.url }));
+      alert('Documento enviado com sucesso!');
+    } catch { alert('Erro ao enviar documento'); }
     finally { setIsSaving(false); }
   };
 

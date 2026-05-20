@@ -513,7 +513,7 @@ const Missionarios: React.FC = () => {
     const matchesCidade = cidadeFilter ? (m.cidade || '').toLowerCase().includes(cidadeFilter.toLowerCase()) : true;
     const matchesPais = paisFilter ? (m.pais || '').toLowerCase().includes(paisFilter.toLowerCase()) : true;
     const matchesSituacao = situacaoFilter ? m.situacao === situacaoFilter : true;
-    const matchesSecao = secaoFilter ? m[`has_${secaoFilter}`] > 0 : true;
+    const matchesSecao = secaoFilter ? (m as any)[`has_${secaoFilter}`] > 0 : true;
 
     return matchesSearch && matchesCasa && matchesCidade && matchesPais && matchesSituacao && matchesSecao;
   });

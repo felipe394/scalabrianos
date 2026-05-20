@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Settings, LogOut, Home as HomeIcon, ChevronDown, ChevronRight,
-  Users, Lock, ClipboardList, DollarSign, ShieldCheck, TrendingUp, MapPin, Globe, Milestone
+  Users, Lock, ClipboardList, DollarSign, ShieldCheck, Globe
 } from 'lucide-react';
 import { useLayout } from '../../context/LayoutContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,7 +28,7 @@ const Sidebar: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdminGeral, canEdit, isOconomo, isSuperior, isRegional } = useAuth();
+  const { isAdminGeral, canEdit, isRegional } = useAuth();
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     [t('menu.admin')]: true,

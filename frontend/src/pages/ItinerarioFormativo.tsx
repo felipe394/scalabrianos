@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Save, Milestone, GraduationCap, Loader2, Users,
-  CheckCircle2, AlertCircle, Search, ChevronRight, Eye
+  CheckCircle2, AlertCircle, Search, Eye
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +27,7 @@ interface DashboardItem {
   total_mandatory: number;
 }
 
-const MANDATORY_STAGES = ['SEMINARIO', 'PROPEDEUTICO', 'FILOSOFIA', 'POSTULADO', 'NOVICIADO', 'TEOLOGIA'];
+// const MANDATORY_STAGES = ['SEMINARIO', 'PROPEDEUTICO', 'FILOSOFIA', 'POSTULADO', 'NOVICIADO', 'TEOLOGIA'];
 
 const ItinerarioFormativo: React.FC = () => {
   const { t } = useTranslation();

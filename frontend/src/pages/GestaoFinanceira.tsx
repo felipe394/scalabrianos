@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Download, Calendar, Home, Users, CheckCircle, XCircle, FileText, AlertCircle, Loader2 } from 'lucide-react';
+import { BarChart3, Download, CheckCircle, XCircle, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Home as HomeIcon, MapPin, Users, Calendar, 
-  ArrowLeft, Loader2, AlertCircle, Phone, 
-  Mail, Globe, Building2, User
+  MapPin, Users, 
+  ArrowLeft, Loader2, AlertCircle, 
+  Globe, Building2, User
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../api';
