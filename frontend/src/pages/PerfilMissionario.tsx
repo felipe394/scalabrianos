@@ -676,20 +676,20 @@ const PerfilMissionario: React.FC = () => {
 
   // Tabs principais (só Dados Civis e Contatos)
   const mainTabs = [
-    { key: 'dados', label: '1. Dados Civis', icon: <User size={16} />, perm: 'dados_civis' },
-    { key: 'contatos', label: '2. Contatos', icon: <MapPin size={16} />, perm: 'contatos' },
+    { key: 'dados', label: t('profile.tabs.personal'), icon: <User size={16} />, perm: 'dados_civis' },
+    { key: 'contatos', label: t('profile.tabs.contact'), icon: <MapPin size={16} />, perm: 'contatos' },
   ];
 
   // Itens da sidebar esquerda em cascata (abas que saíram do menu)
   const sidebarItems = [
-    { key: 'religiosos', label: '3. Dados Religiosos', icon: <BookOpen size={16} />, perm: 'dados_religiosos' },
-    { key: 'itinerario', label: '4. Itinerário Formativo', icon: <Activity size={16} />, perm: 'itinerario_formativo' },
-    { key: 'carreira', label: '5/6/11. Formação & Missão', icon: <GraduationCap size={16} />, perm: 'formacao_academica' },
-    { key: 'saude', label: '7-10. Saúde & Financeiro', icon: <ShieldCheck size={16} />, perm: 'saude' },
-    { key: 'casas', label: 'Presença Missionária', icon: <HomeIcon size={16} />, perm: null },
-    { key: 'acesso', label: 'Acesso', icon: <Lock size={16} />, perm: null },
-    { key: 'obs', label: '12. Observações', icon: <FileText size={16} />, perm: 'observacoes' },
-    { key: 'permissoes', label: 'Permissões', icon: <ShieldCheck size={16} />, perm: null },
+    { key: 'religiosos', label: t('profile.tabs.religious'), icon: <BookOpen size={16} />, perm: 'dados_religiosos' },
+    { key: 'itinerario', label: t('profile.tabs.itinerary'), icon: <Activity size={16} />, perm: 'itinerario_formativo' },
+    { key: 'carreira', label: t('profile.tabs.career'), icon: <GraduationCap size={16} />, perm: 'formacao_academica' },
+    { key: 'saude', label: t('profile.tabs.health_finance'), icon: <ShieldCheck size={16} />, perm: 'saude' },
+    { key: 'casas', label: t('profile.tabs.houses'), icon: <HomeIcon size={16} />, perm: null },
+    { key: 'acesso', label: t('profile.tabs.access'), icon: <Lock size={16} />, perm: null },
+    { key: 'obs', label: t('profile.tabs.obs'), icon: <FileText size={16} />, perm: 'observacoes' },
+    { key: 'permissoes', label: t('profile.tabs.permissions'), icon: <ShieldCheck size={16} />, perm: null },
   ];
 
   const TABS = mainTabs.filter(tab => {
@@ -794,7 +794,7 @@ const PerfilMissionario: React.FC = () => {
             {activeTab === 'dados' && (
               <div className="tab-panel">
                 <div className="section-card">
-                  <h3 className="section-title"><User size={16} /> 1. Dados Civis</h3>
+                  <h3 className="section-title"><User size={16} /> {t('profile.sections.civil')}</h3>
                   <div className="form-grid-3">
 
                     {/* Data de Nascimento */}
@@ -805,7 +805,7 @@ const PerfilMissionario: React.FC = () => {
 
                     {/* Nome do Pai */}
                     <div className="form-group">
-                      <label>Nome do Pai</label>
+                      <label>{t('profile.labels.father_name')}</label>
                       <input
                         type="text"
                         value={civilData.nome_pai || ''}
@@ -814,13 +814,13 @@ const PerfilMissionario: React.FC = () => {
                           setCivilData({ ...civilData, nome_pai: v });
                         }}
                         disabled={!canEdit}
-                        placeholder="Nome do pai"
+                        placeholder={t('profile.labels.father_name')}
                       />
                     </div>
 
                     {/* Nome da Mãe */}
                     <div className="form-group">
-                      <label>Nome da Mãe</label>
+                      <label>{t('profile.labels.mother_name')}</label>
                       <input
                         type="text"
                         value={civilData.nome_mae || ''}
@@ -829,7 +829,7 @@ const PerfilMissionario: React.FC = () => {
                           setCivilData({ ...civilData, nome_mae: v });
                         }}
                         disabled={!canEdit}
-                        placeholder="Nome da mãe"
+                        placeholder={t('profile.labels.mother_name')}
                       />
                     </div>
 

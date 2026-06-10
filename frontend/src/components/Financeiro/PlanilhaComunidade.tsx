@@ -247,18 +247,18 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
       <div className="filters-card">
         <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           <div className="filter-item">
-            <label><Calendar size={14} /> Mês/Ano</label>
+            <label><Calendar size={14} /> {t('planilha.month_year', 'Mês/Ano')}</label>
             <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
           </div>
           <div className="filter-item">
-            <label>Comunidade Religiosa</label>
+            <label>{t('planilha.community', 'Comunidade Religiosa')}</label>
             <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)}>
-              <option value="">Selecione...</option>
+              <option value="">{t('planilha.select_house')}</option>
               {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
           <div className="filter-item">
-             <label>Ações</label>
+             <label>{t('planilha.actions', 'Ações')}</label>
              <button className="btn-export-small" onClick={exportToExcel} style={{ width: '100%', height: '40px', justifyContent: 'center' }}>
                 <Download size={16} /> {t('financeiro.actions.export')}
              </button>

@@ -433,15 +433,15 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias }) => {
             <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
           </div>
           <div className="filter-item">
-            <label>Casa Religiosa</label>
+            <label>{t('planilha.community', 'Casa Religiosa')}</label>
             <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)} disabled={!!planilha}>
-              <option value="">{t('common.loading')}</option>
+              <option value="">{t('planilha.select_house')}</option>
               {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
           {isAdminGeral && (
             <div className="filter-item">
-              <label>Ações</label>
+              <label>{t('planilha.actions', 'Ações')}</label>
               <button className="btn-export-small" onClick={exportConsolidadoToExcel} disabled={consolidadoData.length === 0} style={{ height: '40px', width: '100%', justifyContent: 'center' }}>
                 <Download size={14} /> {t('financeiro.actions.export')}
               </button>

@@ -342,7 +342,7 @@ const CasasReligiosas: React.FC = () => {
 
               <div className="form-row-2">
                 <div className="form-group">
-                  <label>País</label>
+                  <label>{t('casas.country')}</label>
                   <input
                     type="text"
                     placeholder="Ex: Brasil"
