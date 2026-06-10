@@ -74,7 +74,7 @@
           "situation": "Situação",
           "parents": "Nome Pai / Nome Mãe",
           "birth_place_natural": "Naturalidade",
-          "birth_place_city": "Cidade / Estado (Nasc.)",
+          "birth_place_city": "Naturalidade",
           "country": "País",
           "diocese": "Diocese",
           "nationalities": "Nacionalidades",
@@ -112,14 +112,14 @@
           "is_superior": "É Superior Local — cargo de liderança na casa religiosa"
         },
         "houses": {
-          "hint": "Vincule o missionário às frentes missionárias em que vai atuar. O tempo de permanência máximo por casa é 5 anos.",
-          "select_house": "Casa Religiosa",
+          "hint": "(Selecione a Comunidade Religiosa a qual está vinculado o missionário)",
+          "select_house": "Comunidade Religiosa",
           "start_date": "Data de Início",
           "is_superior": "Superior Local",
           "bind_btn": "Vincular Presença",
           "empty": "Nenhuma presença vinculada ainda.",
           "since": "desde",
-          "max_perm_hint": "O tempo de permanência máximo numa casa é de 5 anos."
+          "max_perm_hint": ""
         },
         "access": {
           "title": "Credenciais de Acesso",

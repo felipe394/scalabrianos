@@ -15,6 +15,7 @@ const ForgotPassword: React.FC = () => {
         // In a real app, this would call the API
         console.log('Resetting password for:', email);
         setIsSent(true);
+        setTimeout(() => navigate('/login'), 2500);
     };
 
     return (

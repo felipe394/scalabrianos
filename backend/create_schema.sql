@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS tb_casas_religiosas (
     nome VARCHAR(255) NOT NULL,
     endereco TEXT,
     status ENUM('ATIVO', 'INATIVO') DEFAULT 'ATIVO',
+    regional VARCHAR(255),
+    data_referencia_casa DATE,
+    pm_code VARCHAR(100) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

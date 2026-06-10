@@ -7,6 +7,8 @@ import '../styles/DadosCivis.css';
 interface CivilData {
   data_nascimento: string;
   filiacao: string;
+  nome_pai?: string;
+  nome_mae?: string;
   cidade_estado: string;
   diocese: string;
   pais: string;
@@ -23,6 +25,8 @@ const DadosCivis: React.FC = () => {
   const [formData, setFormData] = useState<CivilData>({
     data_nascimento: '',
     filiacao: '',
+    nome_pai: '',
+    nome_mae: '',
     cidade_estado: '',
     diocese: '',
     pais: '',
@@ -58,6 +62,9 @@ const DadosCivis: React.FC = () => {
         if (data.data_nascimento) {
           data.data_nascimento = data.data_nascimento.split('T')[0];
         }
+        const parts = data.filiacao ? data.filiacao.split('/') : [];
+        data.nome_pai = parts[0] ? parts[0].trim() : '';
+        data.nome_mae = parts[1] ? parts[1].trim() : '';
         setFormData(prev => ({ ...prev, ...data }));
       }
     } catch (err) {
@@ -76,7 +83,12 @@ const DadosCivis: React.FC = () => {
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      await api.post(`${API_URL}/usuarios/${user.id}/dados-civis`, formData);
+      const filiacao = (formData.nome_pai || formData.nome_mae) ? `${formData.nome_pai || ''} / ${formData.nome_mae || ''}` : '';
+      const dataToSave = { ...formData, filiacao };
+      delete dataToSave.nome_pai;
+      delete dataToSave.nome_mae;
+
+      await api.post(`${API_URL}/usuarios/${user.id}/dados-civis`, dataToSave);
       alert('Dados salvos com sucesso!');
     } catch (err) {
       console.error('Error saving civil data:', err);
@@ -130,19 +142,31 @@ const DadosCivis: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label>Filiação</label>
+            <label>Nome do Pai</label>
             <input 
               type="text" 
-              name="filiacao"
-              placeholder="Nome dos pais..." 
-              value={formData.filiacao}
+              name="nome_pai"
+              placeholder="Nome do pai..." 
+              value={formData.nome_pai}
               onChange={handleInputChange}
               disabled={!canEdit} 
             />
           </div>
 
           <div className="form-group">
-            <label>Cidade/Estado</label>
+            <label>Nome da Mãe</label>
+            <input 
+              type="text" 
+              name="nome_mae"
+              placeholder="Nome da mãe..." 
+              value={formData.nome_mae}
+              onChange={handleInputChange}
+              disabled={!canEdit} 
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Naturalidade</label>
             <input 
               type="text" 
               name="cidade_estado"
@@ -172,18 +196,6 @@ const DadosCivis: React.FC = () => {
               name="pais"
               placeholder="Brasil" 
               value={formData.pais}
-              onChange={handleInputChange}
-              disabled={!canEdit} 
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Naturalidade</label>
-            <input 
-              type="text" 
-              name="naturalidade"
-              placeholder="Naturalidade..." 
-              value={formData.naturalidade}
               onChange={handleInputChange}
               disabled={!canEdit} 
             />

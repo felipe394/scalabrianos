@@ -1,28 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Save, BookOpen, ShieldCheck, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Save, BookOpen, Loader2, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import '../styles/DadosReligiosos.css';
 
 interface ReligiousData {
-  primeiros_votos_data: string;
-  votos_perpetuos_data: string;
-  lugar_profissao: string;
-  diaconato_data: string;
-  presbiterato_data: string;
-  bispo_ordenante: string;
+  data_batismo: string;
+  data_primeira_comunhao: string;
+  data_crisma: string;
 }
 
 const DadosReligiosos: React.FC = () => {
   const { canEdit, user } = useAuth();
   const [formData, setFormData] = useState<ReligiousData>({
-    primeiros_votos_data: '',
-    votos_perpetuos_data: '',
-    lugar_profissao: '',
-    diaconato_data: '',
-    presbiterato_data: '',
-    bispo_ordenante: '',
+    data_batismo: '',
+    data_primeira_comunhao: '',
+    data_crisma: '',
   });
+  const [pendingDocDesc, setPendingDocDesc] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -41,10 +37,13 @@ const DadosReligiosos: React.FC = () => {
       if (response.data) {
         const data = response.data;
         // Format dates
-        ['primeiros_votos_data', 'votos_perpetuos_data', 'diaconato_data', 'presbiterato_data'].forEach(field => {
+        ['data_batismo', 'data_primeira_comunhao', 'data_crisma'].forEach(field => {
           if (data[field]) data[field] = data[field].split('T')[0];
         });
-        setFormData(prev => ({ ...prev, ...data }));
+        setFormData(prev => ({
+          ...prev,
+          ...data,
+        }));
       }
     } catch (err) {
       console.error('Error fetching religious data:', err);
@@ -67,6 +66,31 @@ const DadosReligiosos: React.FC = () => {
     } catch (err) {
       console.error('Error saving religious data:', err);
       alert('Erro ao salvar dados');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const uploadDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+    if (!pendingDocDesc.trim()) return alert('Informe a descrição do documento');
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    formData.append('descricao', pendingDocDesc);
+
+    setIsSaving(true);
+    try {
+      await api.post(`${API_URL}/usuarios/${user.id}/documentos`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setPendingDocDesc('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      alert('Documento enviado com sucesso!');
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      alert('Erro ao enviar documento');
     } finally {
       setIsSaving(false);
     }
@@ -95,78 +119,67 @@ const DadosReligiosos: React.FC = () => {
 
       <div className="form-card">
         <div className="section-title">
-          <BookOpen size={20} /> <h3>Informações de Votos</h3>
+          <BookOpen size={20} /> <h3>Dados Religiosos</h3>
         </div>
 
-        <div className="form-grid">
+        <div className="form-grid-3">
           <div className="form-group">
-            <label>Primeiros Votos (Data)</label>
-            <input 
-              type="date" 
-              name="primeiros_votos_data"
-              value={formData.primeiros_votos_data}
+            <label>Batismo</label>
+            <input
+              type="date"
+              name="data_batismo"
+              value={formData.data_batismo}
               onChange={handleInputChange}
-              disabled={!canEdit} 
+              disabled={!canEdit}
             />
           </div>
           <div className="form-group">
-            <label>Votos Perpétuos (Data)</label>
-            <input 
-              type="date" 
-              name="votos_perpetuos_data"
-              value={formData.votos_perpetuos_data}
+            <label>1ª Comunhão</label>
+            <input
+              type="date"
+              name="data_primeira_comunhao"
+              value={formData.data_primeira_comunhao}
               onChange={handleInputChange}
-              disabled={!canEdit} 
+              disabled={!canEdit}
             />
           </div>
           <div className="form-group">
-            <label>Lugar da Profissão</label>
-            <input 
-              type="text" 
-              name="lugar_profissao"
-              placeholder="Cidade/País" 
-              value={formData.lugar_profissao}
+            <label>Crisma</label>
+            <input
+              type="date"
+              name="data_crisma"
+              value={formData.data_crisma}
               onChange={handleInputChange}
-              disabled={!canEdit} 
+              disabled={!canEdit}
             />
           </div>
         </div>
 
         <div className="section-title mt-4">
-          <ShieldCheck size={20} /> <h3>Ordenação</h3>
+          <h3>Anexar Certidão</h3>
         </div>
 
-        <div className="form-grid">
-          <div className="form-group">
-            <label>Diaconato (Data)</label>
-            <input 
-              type="date" 
-              name="diaconato_data"
-              value={formData.diaconato_data}
-              onChange={handleInputChange}
-              disabled={!canEdit} 
+        <div className="form-grid-1">
+          <div className="form-group full">
+            <label>Descrição do documento</label>
+            <input
+              type="text"
+              placeholder="Ex: Certidão de Batismo"
+              value={pendingDocDesc}
+              onChange={e => setPendingDocDesc(e.target.value)}
+              disabled={!canEdit}
             />
           </div>
-          <div className="form-group">
-            <label>Presbiterato (Data)</label>
-            <input 
-              type="date" 
-              name="presbiterato_data"
-              value={formData.presbiterato_data}
-              onChange={handleInputChange}
-              disabled={!canEdit} 
-            />
-          </div>
-          <div className="form-group full-row">
-            <label>Bispo Ordenante</label>
-            <input 
-              type="text" 
-              name="bispo_ordenante"
-              placeholder="Nome do Bispo" 
-              value={formData.bispo_ordenante}
-              onChange={handleInputChange}
-              disabled={!canEdit} 
-            />
+          <div className="form-group full">
+            <label>Anexar arquivo</label>
+            <div className="file-input-wrapper" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <input type="file" ref={fileInputRef} onChange={uploadDocument} style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png" disabled={!canEdit} />
+              <button type="button" className="btn-upload-doc" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isSaving}>
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                {isSaving ? 'Enviando...' : 'Selecionar arquivo'}
+              </button>
+              <span style={{ color: '#555', fontSize: '0.95rem' }}>PDF/JPG/PNG</span>
+            </div>
           </div>
         </div>
       </div>

@@ -9,7 +9,8 @@ async function migrate() {
     await db.query(`
       ALTER TABLE tb_casas_religiosas 
       ADD COLUMN IF NOT EXISTS regional VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS data_referencia_casa DATE;
+      ADD COLUMN IF NOT EXISTS data_referencia_casa DATE,
+      ADD COLUMN IF NOT EXISTS pm_code VARCHAR(100) DEFAULT NULL;
     `);
 
     // 2. Create tb_categorias_financas

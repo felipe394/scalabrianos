@@ -6,8 +6,10 @@
     justify-content: center;
     position: relative;
     background-image: url('../assets/login_rnsmm.png');
-    background-size: cover;
+    background-size: auto 100%;
     background-position: center;
+    background-repeat: no-repeat;
+    background-color: var(--bg-color);
     overflow: hidden;
 }
 

@@ -1173,3 +1173,123 @@
     flex-direction: column;
   }
 }
+
+/* ─── Layout Perfil: sidebar esquerda + área principal ─────── */
+.perfil-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* ─── Sidebar esquerda em cascata ───────────────────────────── */
+.perfil-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  position: sticky;
+  top: 20px;
+}
+
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #94a3b8;
+  padding: 0 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+  position: relative;
+}
+
+.sidebar-nav-item:hover {
+  background: #f1f5f9;
+  color: #013375;
+}
+
+.sidebar-nav-item.active {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #013375;
+  font-weight: 700;
+  border-left: 3px solid #013375;
+  padding-left: 7px;
+}
+
+.sidebar-nav-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+  opacity: 1;
+}
+
+.sidebar-nav-label {
+  line-height: 1.3;
+}
+
+/* ─── Área principal (tabs + conteúdo) ──────────────────────── */
+.perfil-main-area {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Quando sidebar está ativa, tabs ficam mais compactos */
+.perfil-main-area .perfil-tabs {
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .perfil-layout {
+    flex-direction: column;
+  }
+  .perfil-sidebar {
+    width: 100%;
+    position: static;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sidebar-nav-item {
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+    text-align: center;
+  }
+  .sidebar-nav-item.active {
+    border-left: none;
+    border-bottom: 3px solid #013375;
+    padding-left: 10px;
+    padding-bottom: 6px;
+  }
+}

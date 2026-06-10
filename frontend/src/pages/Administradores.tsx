@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Lock, Eye, EyeOff, X, Save, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Search, Filter, Lock, Eye, EyeOff, Trash2, X, Save, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, type UserRole } from '../context/AuthContext';
 import api from '../api';
@@ -138,6 +138,19 @@ const Administradores: React.FC = () => {
     }
   };
 
+  const handleDeleteProfile = async (profile: AdminProfile) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o usuário ${profile.nome} (${profile.login})? Isso apagará todas as informações associadas.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/usuarios/${profile.id}`);
+      await fetchProfiles();
+    } catch {
+      alert('Erro ao excluir usuário. Tente novamente.');
+    }
+  };
+
   const filtered = profiles.filter(p => {
     const matchesSearch = p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || p.login.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter ? p.role === roleFilter : true;
@@ -204,7 +217,14 @@ const Administradores: React.FC = () => {
                   <td>{profile.login}</td>
                   <td className="center"><span className={`role-tag ${profile.role.toLowerCase()}`}>{getRoleLabel(profile.role)}</span></td>
                   <td className="center"><span className={`status-tag ${profile.status.toLowerCase()}`}>{profile.status}</span></td>
-                  <td><button className="btn-icon-view" onClick={() => handleOpenEdit(profile)}><Eye size={18} /></button></td>
+                  <td>
+                    <div className="action-buttons">
+                      <button className="btn-icon-view" onClick={() => handleOpenEdit(profile)}><Eye size={18} /></button>
+                      {canEdit && (
+                        <button className="btn-icon-delete" type="button" onClick={() => handleDeleteProfile(profile)}><Trash2 size={18} /></button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

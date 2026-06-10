@@ -198,8 +198,17 @@ tr:hover td {
     color: #166534;
 }
 
+.center {
+    text-align: center;
+}
+
 /* Unified Lite Action Buttons */
 .pm-code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    white-space: nowrap;
     background: #f1f5f9;
     color: #475569;
     padding: 4px 10px;

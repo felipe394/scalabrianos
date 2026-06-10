@@ -21,12 +21,12 @@ interface ReligiousHouse {
 }
 
 const NOMENCLATURES = [
-  { code: 'CR', label: 'CR - CASA RELIGIOSA' },
-  { code: 'CI', label: 'CI - CENTRO INTEGRAÇÃO' },
-  { code: 'P', label: 'P - PARÓQUIA' },
-  { code: 'M', label: 'M - MISSÃO' },
-  { code: 'PV', label: 'PV - PASTORAL VOCACIONAL' },
-  { code: 'CS', label: 'CS - CASA SÊNIOR' },
+  { code: 'CI', label: 'Casas de Idosos – CI' },
+  { code: 'CR', label: 'Casas Religiosas – CR' },
+  { code: 'M', label: 'Obras – M' },
+  { code: 'P', label: 'Paróquia – P' },
+  { code: 'PV', label: 'Pastoral Vocacional - PV' },
+  { code: 'CS', label: 'Seminário - CS' },
 ];
 
 const CasasReligiosas: React.FC = () => {
@@ -339,33 +339,13 @@ const CasasReligiosas: React.FC = () => {
                 />
               </div>
 
-              <div className="form-row-2">
-                <div className="form-group">
-                  <label>{t('casas.paroco')}</label>
-                  <input
-                    type="text"
-                    placeholder="Nome do Pároco..."
-                    value={editingHouse.paroco || ''}
-                    onChange={(e) => setEditingHouse({ ...editingHouse, paroco: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>{t('casas.vigario')}</label>
-                  <input
-                    type="text"
-                    placeholder="Nome do Vigário..."
-                    value={editingHouse.vigario_paroquial || ''}
-                    onChange={(e) => setEditingHouse({ ...editingHouse, vigario_paroquial: e.target.value })}
-                  />
-                </div>
-              </div>
 
               <div className="form-row-2">
                 <div className="form-group">
-                  <label>{t('casas.regional')}</label>
+                  <label>País</label>
                   <input
                     type="text"
-                    placeholder={t('casas.regional_placeholder')}
+                    placeholder="Ex: Brasil"
                     value={editingHouse.regional || ''}
                     onChange={(e) => setEditingHouse({ ...editingHouse, regional: e.target.value })}
                   />

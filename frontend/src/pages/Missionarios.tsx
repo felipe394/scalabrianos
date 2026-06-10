@@ -42,6 +42,10 @@ interface CasaVinculo {
   casa_id: string;
   data_inicio: string;
   is_superior: boolean;
+  funcao?: string[];
+  tipo?: string;
+  pm?: string;
+  pais?: string;
 }
 
 interface WizardData {
@@ -73,6 +77,10 @@ interface WizardData {
   bispo_ordenante: string;
   is_oconomo: boolean;
   is_superior: boolean;
+  // Sacramentos
+  data_batismo: string;
+  data_primeira_comunhao: string;
+  data_crisma: string;
   // Step 5 - Acesso
   login: string;
   password: string;
@@ -112,6 +120,7 @@ const initialWizard: WizardData = {
   primeiros_votos_data: '', votos_perpetuos_data: '', lugar_profissao: '',
   diaconato_data: '', presbiterato_data: '', bispo_ordenante: '',
   is_oconomo: false, is_superior: false,
+  data_batismo: '', data_primeira_comunhao: '', data_crisma: '',
   login: '', password: '', status: 'ATIVO',
   nacionalidades: ['Brasileira'],
   itinerario: [
@@ -145,9 +154,30 @@ const PAISES_COMMON = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Parse a date string like 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM:SS' as LOCAL date (avoid timezone shifts)
+function parseDateLocal(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const base = String(dateStr).split('T')[0].split(' ')[0];
+  const parts = base.split('-');
+  if (parts.length === 3) {
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    const d = Number(parts[2]);
+    if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) return new Date(y, m, d);
+  }
+  const d = new Date(dateStr as string);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateLocal(dateStr?: string | null): string {
+  const d = parseDateLocal(dateStr);
+  return d ? d.toLocaleDateString('pt-BR') : '—';
+}
+
 function calcDuracao(dataInicio: string): string {
   if (!dataInicio) return '';
-  const ini = new Date(dataInicio);
+  const ini = parseDateLocal(dataInicio);
+  if (!ini) return '';
   const hoje = new Date();
   let anos = hoje.getFullYear() - ini.getFullYear();
   let meses = hoje.getMonth() - ini.getMonth();
@@ -227,11 +257,14 @@ const Missionarios: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocDescricao, setPendingDocDescricao] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
+  const [batismoDocFile, setBatismoDocFile] = useState<File | null>(null);
+  const [comunhaoDocFile, setComunhaoDocFile] = useState<File | null>(null);
+  const [crismaDocFile, setCrismaDocFile] = useState<File | null>(null);
 
   // Step 4 — casas
   const [casasDisponiveis, setCasasDisponiveis] = useState<Casa[]>([]);
   const [casasVinculos, setCasasVinculos] = useState<CasaVinculo[]>([]);
-  const [novaCasa, setNovaCasa] = useState<CasaVinculo>({ casa_id: '', data_inicio: new Date().toISOString().split('T')[0], is_superior: false });
+  const [novaCasa, setNovaCasa] = useState<CasaVinculo>({ casa_id: '', data_inicio: '', is_superior: false, funcao: [], tipo: '', pm: '', pais: 'Brasil' });
 
   // Extra file refs for wizard steps
   const formacaoFileRef = useRef<HTMLInputElement>(null);
@@ -275,8 +308,11 @@ const Missionarios: React.FC = () => {
     setItineraryDocs([]);
     setItinSelectedStage('');
     setCasasVinculos([]);
-    setNovaCasa({ casa_id: '', data_inicio: new Date().toISOString().split('T')[0], is_superior: false });
+    setNovaCasa({ casa_id: '', data_inicio: '', is_superior: false, funcao: [], tipo: '', pm: '', pais: 'Brasil' });
     setPendingDocDescricao('');
+    setBatismoDocFile(null);
+    setComunhaoDocFile(null);
+    setCrismaDocFile(null);
     setWizardStep(0);
     setIsWizardOpen(true);
   };
@@ -342,32 +378,45 @@ const Missionarios: React.FC = () => {
   const addCasaVinculo = () => {
     if (!novaCasa.casa_id) { alert('Selecione uma casa'); return; }
     if (!novaCasa.data_inicio) { alert('Informe a data de início'); return; }
-    // Check max 5 years
-    const ini = new Date(novaCasa.data_inicio);
-    const maxDate = new Date(ini);
-    maxDate.setFullYear(maxDate.getFullYear() + 5);
+    // Check max 5 years (keep validation but parse as local date)
+    const ini = parseDateLocal(novaCasa.data_inicio);
+    if (ini) {
+      const maxDate = new Date(ini);
+      maxDate.setFullYear(maxDate.getFullYear() + 5);
+    }
     setCasasVinculos(prev => [...prev, { ...novaCasa }]);
-    setNovaCasa({ casa_id: '', data_inicio: new Date().toISOString().split('T')[0], is_superior: false });
+    setNovaCasa({ casa_id: '', data_inicio: '', is_superior: false, funcao: [], tipo: '', pm: '', pais: 'Brasil' });
   };
 
   const removeCasaVinculo = (idx: number) =>
     setCasasVinculos(prev => prev.filter((_, i) => i !== idx));
 
+  const uploadSacramentoFile = async (userId: number, campo: 'doc_batismo' | 'doc_primeira_comunhao' | 'doc_crisma', file: File) => {
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    fd.append('campo', campo);
+    await api.post(`/usuarios/${userId}/dados-religiosos/upload-sacramento`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  };
+
   // ── Finish ──
   const handleFinish = async () => {
-    if (!wizardData.login || !wizardData.password) {
-      alert('Informe o e-mail de login e a senha.');
+    if (!wizardData.login) {
+      alert('Informe o e-mail de login.');
       return;
     }
+    const effectivePassword = wizardData.password?.trim() || 'Scalab@10';
     setSaveLoading(true);
     try {
       // 1 — Create user
       const userRes = await api.post('/usuarios', {
-        nome: wizardData.nome, login: wizardData.login, password: wizardData.password,
+        nome: wizardData.nome, login: wizardData.login, password: effectivePassword,
         role: 'PADRE', status: wizardData.status, situacao: wizardData.situacao,
         is_oconomo: wizardData.is_oconomo, is_superior: wizardData.is_superior,
       });
       const newId = userRes.data.id;
+
 
       // 2 — Civil data
       const fullFiliacao = `${wizardData.nome_pai || ''} / ${wizardData.nome_mae || ''}`.trim();
@@ -397,14 +446,31 @@ const Missionarios: React.FC = () => {
         diaconato_data: wizardData.diaconato_data || null,
         presbiterato_data: wizardData.presbiterato_data || null,
         bispo_ordenante: wizardData.bispo_ordenante,
+        data_batismo: wizardData.data_batismo || null,
+        data_primeira_comunhao: wizardData.data_primeira_comunhao || null,
+        data_crisma: wizardData.data_crisma || null,
       });
+
+      if (batismoDocFile) {
+        await uploadSacramentoFile(newId, 'doc_batismo', batismoDocFile);
+      }
+      if (comunhaoDocFile) {
+        await uploadSacramentoFile(newId, 'doc_primeira_comunhao', comunhaoDocFile);
+      }
+      if (crismaDocFile) {
+        await uploadSacramentoFile(newId, 'doc_crisma', crismaDocFile);
+      }
 
       // 5 — Casa vinculos
       for (const v of casasVinculos) {
+        const funcaoPayload = Array.isArray(v.funcao) ? v.funcao.join(',') : (v.funcao ? String(v.funcao) : (v.is_superior ? 'Superior Local' : ''));
         await api.post(`/usuarios/${newId}/casas-historico`, {
           casa_id: v.casa_id, data_inicio: v.data_inicio, data_fim: null,
-          funcao: v.is_superior ? 'Superior Local' : '',
+          funcao: funcaoPayload,
           is_superior: v.is_superior,
+          pm: v.pm || null,
+          tipo: v.tipo || null,
+          pais: v.pais || null,
         });
       }
 
@@ -638,6 +704,26 @@ const Missionarios: React.FC = () => {
               <button className="close-btn" onClick={() => setIsWizardOpen(false)}><X size={20} /></button>
             </div>
 
+            {/* Missionary name banner – visible from Step 2 onward */}
+            {wizardStep >= 1 && wizardData.nome && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: 'linear-gradient(90deg, #eef4ff 0%, #f5f0ff 100%)',
+                border: '1px solid #d0e0ff',
+                borderRadius: '10px',
+                padding: '8px 16px',
+                margin: '0 0 12px 0',
+              }}>
+                <span style={{ fontSize: '18px' }}>👤</span>
+                <div>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7a8caa' }}>Missionário em cadastro</span>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary, #3a6fc4)', lineHeight: 1.2 }}>{wizardData.nome}</div>
+                </div>
+              </div>
+            )}
+
             {/* Step bar */}
             <div className="wizard-steps">
               {STEPS.map((step, i) => (
@@ -689,15 +775,9 @@ const Missionarios: React.FC = () => {
                   </div>
                   <div className="form-row-2">
                     <div className="form-group">
-                      <label>{t('missionaries.wizard.civil.birth_place_natural')}</label>
-                      <input type="text" value={wizardData.naturalidade} onChange={e => set('naturalidade', e.target.value)} placeholder="Naturalidade..." />
-                    </div>
-                    <div className="form-group">
                       <label>{t('missionaries.wizard.civil.birth_place_city')}</label>
                       <input type="text" value={wizardData.cidade_estado} onChange={e => set('cidade_estado', e.target.value)} placeholder="Cidade - UF" />
                     </div>
-                  </div>
-                  <div className="form-row-2">
                     <div className="form-group">
                       <label>{t('missionaries.wizard.civil.country')}</label>
                       <input
@@ -711,9 +791,11 @@ const Missionarios: React.FC = () => {
                         {PAISES_COMMON.map(p => <option key={p} value={p} />)}
                       </datalist>
                     </div>
+                  </div>
+                  <div className="form-row-2">
                     <div className="form-group">
                       <label>{t('missionaries.wizard.civil.diocese')}</label>
-                      <input type="text" value={wizardData.diocese} onChange={e => set('diocese', e.target.value)} />
+                      <input type="text" value={wizardData.diocese} onChange={e => set('diocese', e.target.value)} placeholder="Diocese..." />
                     </div>
                   </div>
 
@@ -727,7 +809,7 @@ const Missionarios: React.FC = () => {
                       <Plus size={12} /> {t('missionaries.wizard.civil.add_btn')}
                     </button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', alignItems: 'start' }}>
                     {wizardData.nacionalidades.map((nac, idx) => (
                       <div key={idx} style={{ display: 'flex', gap: '5px' }}>
                         <input
@@ -856,29 +938,44 @@ const Missionarios: React.FC = () => {
               {wizardStep === 2 && (
                 <div className="wizard-step-content">
                   <div className="wizard-divider">3. Dados Religiosos</div>
-                  <div className="form-row-2">
-                    <div className="form-group"><label>{t('missionaries.wizard.religious.first_vows')}</label><input type="date" value={wizardData.primeiros_votos_data} onChange={e => set('primeiros_votos_data', e.target.value)} /></div>
-                    <div className="form-group"><label>{t('missionaries.wizard.religious.perpetual_vows')}</label><input type="date" value={wizardData.votos_perpetuos_data} onChange={e => set('votos_perpetuos_data', e.target.value)} /></div>
+
+                  {/* ── Sacramentos ── */}
+                  <div className="wizard-divider" style={{ fontSize: '0.78rem', marginBottom: '8px' }}>Informações Religiosas</div>
+                  <div className="form-row-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '10px' }}>
+                    <div className="form-group">
+                      <label>Batismo</label>
+                      <input type="date" value={wizardData.data_batismo} onChange={e => set('data_batismo', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>1ª Comunhão</label>
+                      <input type="date" value={wizardData.data_primeira_comunhao} onChange={e => set('data_primeira_comunhao', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Crisma</label>
+                      <input type="date" value={wizardData.data_crisma} onChange={e => set('data_crisma', e.target.value)} />
+                    </div>
                   </div>
-                  <div className="form-group full"><label>{t('missionaries.wizard.religious.profession_place')}</label><input type="text" value={wizardData.lugar_profissao} onChange={e => set('lugar_profissao', e.target.value)} /></div>
-                  <div className="wizard-divider">{t('missionaries.wizard.religious.ordination_title')}</div>
-                  <div className="form-row-2">
-                    <div className="form-group"><label>{t('missionaries.wizard.religious.diaconate')}</label><input type="date" value={wizardData.diaconato_data} onChange={e => set('diaconato_data', e.target.value)} /></div>
-                    <div className="form-group"><label>{t('missionaries.wizard.religious.presbiterato')}</label><input type="date" value={wizardData.presbiterato_data} onChange={e => set('presbiterato_data', e.target.value)} /></div>
+
+                  <div className="form-row-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '10px' }}>
+                    <div className="form-group">
+                      <label>Certidão de Batismo</label>
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setBatismoDocFile(e.target.files?.[0] || null)} />
+                      {batismoDocFile && <span className="file-selected">{batismoDocFile.name}</span>}
+                    </div>
+                    <div className="form-group">
+                      <label>Certidão de 1ª Comunhão</label>
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setComunhaoDocFile(e.target.files?.[0] || null)} />
+                      {comunhaoDocFile && <span className="file-selected">{comunhaoDocFile.name}</span>}
+                    </div>
+                    <div className="form-group">
+                      <label>Certidão de Crisma</label>
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setCrismaDocFile(e.target.files?.[0] || null)} />
+                      {crismaDocFile && <span className="file-selected">{crismaDocFile.name}</span>}
+                    </div>
                   </div>
-                  <div className="form-group full"><label>{t('missionaries.wizard.religious.ordaining_bishop')}</label><input type="text" value={wizardData.bispo_ordenante} onChange={e => set('bispo_ordenante', e.target.value)} /></div>
-                  <div className="form-group full">
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={wizardData.is_oconomo} onChange={e => set('is_oconomo', e.target.checked)} />
-                      {t('missionaries.wizard.religious.is_oconomo')}
-                    </label>
-                  </div>
-                  <div className="form-group full">
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={wizardData.is_superior} onChange={e => set('is_superior', e.target.checked)} />
-                      {t('missionaries.wizard.religious.is_superior')}
-                    </label>
-                  </div>
+                  <p style={{ fontSize: '0.78rem', color: '#888', marginBottom: '16px' }}>
+                    Os documentos dos sacramentos podem ser anexados agora ou após o cadastro, na aba <strong>Dados Religiosos</strong> do perfil do missionário.
+                  </p>
                 </div>
               )}
 
@@ -1166,6 +1263,18 @@ const Missionarios: React.FC = () => {
                   <div className="casa-wizard-add">
                     <div className="casa-wizard-add-fields">
                       <div className="form-group">
+                        <label>Tipo</label>
+                        <select value={novaCasa.tipo} onChange={e => setNovaCasa(p => ({ ...p, tipo: e.target.value }))}>
+                          <option value="">Selecione...</option>
+                          <option value="CI">Casas de Idosos – CI</option>
+                          <option value="CR">Casas Religiosas – CR</option>
+                          <option value="M">Obras – M</option>
+                          <option value="P">Paróquia – P</option>
+                          <option value="PV">Pastoral Vocacional - PV</option>
+                          <option value="CS">Seminário - CS</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
                         <label>{t('missionaries.wizard.houses.select_house')}</label>
                         <select value={novaCasa.casa_id} onChange={e => setNovaCasa(p => ({ ...p, casa_id: e.target.value }))}>
                           <option value="">Selecione...</option>
@@ -1173,8 +1282,47 @@ const Missionarios: React.FC = () => {
                         </select>
                       </div>
                       <div className="form-group">
+                        <label>PM</label>
+                        <input type="text" value={novaCasa.pm} onChange={e => setNovaCasa(p => ({ ...p, pm: e.target.value }))} placeholder="Ex: CR 13" />
+                      </div>
+                      <div className="form-group">
+                        <label>País</label>
+                        <input type="text" list="paises-list" value={novaCasa.pais} onChange={e => setNovaCasa(p => ({ ...p, pais: e.target.value }))} placeholder="Selecione ou digite..." />
+                        <datalist id="paises-list">
+                          {PAISES_COMMON.map(p => <option key={p} value={p} />)}
+                        </datalist>
+                      </div>
+                      <div className="form-group">
                         <label>{t('missionaries.wizard.houses.start_date')}</label>
                         <input type="date" value={novaCasa.data_inicio} onChange={e => setNovaCasa(p => ({ ...p, data_inicio: e.target.value }))} />
+                      </div>
+                      <div className="form-group" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        {[
+                          { key: 'Superior Local', label: 'Superior Local', isSuperior: true },
+                          { key: 'Ecônomo Local', label: 'Ecônomo Local' },
+                          { key: 'Pároco', label: 'Pároco' },
+                          { key: 'Diretor', label: 'Diretor' },
+                          { key: 'Vigário', label: 'Vigário' },
+                          { key: 'Reitor', label: 'Reitor' },
+                        ].map(r => (
+                          <label key={r.key} className="checkbox-label" style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(novaCasa.funcao) && novaCasa.funcao.includes(r.key)}
+                              onChange={e => setNovaCasa(p => {
+                                const current = Array.isArray(p.funcao) ? [...p.funcao] : [];
+                                if (e.target.checked) {
+                                  if (!current.includes(r.key)) current.push(r.key);
+                                } else {
+                                  const idx = current.indexOf(r.key);
+                                  if (idx >= 0) current.splice(idx, 1);
+                                }
+                                return { ...p, funcao: current, is_superior: r.isSuperior ? current.includes('Superior Local') : p.is_superior };
+                              })}
+                            />
+                            {r.label}
+                          </label>
+                        ))}
                       </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
@@ -1196,9 +1344,11 @@ const Missionarios: React.FC = () => {
                             <div>
                               <span className="casa-wz-nome">{casaNome(v.casa_id)}</span>
                               <div className="casa-wz-meta">
-                                <span>{t('missionaries.wizard.houses.since')} {new Date(v.data_inicio).toLocaleDateString()}</span>
+                                  <span>{t('missionaries.wizard.houses.since')} {formatDateLocal(v.data_inicio)}</span>
                                 <span className="duracao-pill">⏱ {calcDuracao(v.data_inicio)}</span>
-                                {v.is_superior && <span className="superior-pill"><Star size={11} /> {t('missionaries.wizard.houses.is_superior')}</span>}
+                                {v.funcao && v.funcao.length > 0 && <span className="superior-pill"><Star size={11} /> {Array.isArray(v.funcao) ? v.funcao.join(', ') : v.funcao}</span>}
+                                {v.pm && <div style={{ fontSize: '12px', color: '#3b82f6', marginTop: '4px' }}>PM: {v.pm}</div>}
+                                {v.tipo && <div style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>{v.tipo}</div>}
                               </div>
                             </div>
                           </div>
@@ -1210,10 +1360,7 @@ const Missionarios: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="casa-wz-info">
-                    <AlertCircle size={14} />
-                    {t('missionaries.wizard.houses.max_perm_hint')}
-                  </div>
+                  
                 </div>
               )}
 
@@ -1229,14 +1376,32 @@ const Missionarios: React.FC = () => {
                     <input type="email" value={wizardData.login} onChange={e => set('login', e.target.value)} placeholder="padre@email.com" />
                   </div>
                   <div className="form-group full">
-                    <label>{t('missionaries.wizard.access.password')}</label>
+                    <label>Senha de Acesso <span style={{ color: '#94a3b8', fontWeight: 400 }}>(opcional)</span></label>
                     <div className="password-group">
-                      <input type={showPassword ? 'text' : 'password'} value={wizardData.password} onChange={e => set('password', e.target.value)} placeholder={t('missionaries.wizard.access.pass_hint')} />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={wizardData.password}
+                        onChange={e => set('password', e.target.value)}
+                        placeholder="Deixe em branco para usar a senha padrão"
+                      />
                       <button type="button" className="password-toggle" onClick={() => setShowPassword(p => !p)}>
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
                     </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '10px',
+                      background: 'linear-gradient(90deg, #eff6ff, #f0fdf4)',
+                      border: '1px solid #bfdbfe', borderRadius: '10px', padding: '10px 14px',
+                    }}>
+                      <span style={{ fontSize: '16px', marginTop: '1px' }}>ℹ️</span>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: 1.6 }}>
+                        Se nenhuma senha for digitada, o sistema usará a senha padrão{' '}
+                        <strong style={{ color: '#1d4ed8', fontFamily: 'monospace', fontSize: '0.9rem' }}>Scalab@10</strong>.
+                        {' '}O missionário receberá esta senha no e-mail de boas-vindas e poderá alterá-la no primeiro acesso.
+                      </p>
+                    </div>
                   </div>
+
                   <div className="form-group full">
                     <label>{t('missionaries.wizard.access.account_status')}</label>
                     <select value={wizardData.status} onChange={e => set('status', e.target.value as 'ATIVO' | 'INATIVO')}>
@@ -1248,9 +1413,9 @@ const Missionarios: React.FC = () => {
                   <div className="form-group full">
                     <label>Acesso (Permissões)</label>
                     <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '10px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                         {PERMISSIONS_LIST.map(perm => (
-                          <label key={perm.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                          <div key={perm.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', fontSize: '0.85rem', cursor: 'pointer', padding: '6px 4px' }}>
                             <input 
                               type="checkbox" 
                               checked={!!wizardData.permissoes?.[perm.id]} 
@@ -1260,8 +1425,8 @@ const Missionarios: React.FC = () => {
                                 set('permissoes', newPerms);
                               }}
                             />
-                            <span>{perm.label}</span>
-                          </label>
+                            <div style={{ textAlign: 'center', fontWeight: 600, color: '#475569' }}>{perm.label}</div>
+                          </div>
                         ))}
                       </div>
                     </div>

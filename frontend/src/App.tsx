@@ -19,6 +19,7 @@ import Financeiro from './pages/Financeiro';
 import GestaoFinanceira from './pages/GestaoFinanceira';
 import MapaRNSMM from './pages/MapaRNSMM';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import MainLayout from './components/Layout/MainLayout';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -30,6 +31,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           
           <Route path="/home" element={
             <ProtectedRoute>

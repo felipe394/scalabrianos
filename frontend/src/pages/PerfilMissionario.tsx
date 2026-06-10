@@ -37,6 +37,8 @@ interface ItineraryStage {
 interface CivilData {
   data_nascimento: string;
   filiacao: string;
+  nome_pai?: string;
+  nome_mae?: string;
   cidade_estado: string;
   diocese: string;
   pais: string;
@@ -66,6 +68,12 @@ interface ReligiososData {
   diaconato_data: string;
   presbiterato_data: string;
   bispo_ordenante: string;
+  data_batismo: string;
+  data_primeira_comunhao: string;
+  data_crisma: string;
+  doc_batismo: string;
+  doc_primeira_comunhao: string;
+  doc_crisma: string;
 }
 
 interface SituacaoData {
@@ -164,7 +172,7 @@ interface CasaHistorico {
   casa_nome: string;
   data_inicio: string;
   data_fim: string | null;
-  funcao: string;
+  funcao: string[];
   is_superior: boolean;
 }
 
@@ -178,10 +186,30 @@ interface QuadroPessoal {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function parseDateLocal(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const base = String(dateStr).split('T')[0].split(' ')[0];
+  const parts = base.split('-');
+  if (parts.length === 3) {
+    const y = Number(parts[0]);
+    const m = Number(parts[1]) - 1;
+    const d = Number(parts[2]);
+    if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) return new Date(y, m, d);
+  }
+  const d = new Date(dateStr as string);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateLocal(dateStr?: string | null): string {
+  const d = parseDateLocal(dateStr);
+  return d ? d.toLocaleDateString('pt-BR') : '?';
+}
+
 function calcDuracao(dataInicio: string, dataFim?: string | null): string {
   if (!dataInicio) return '';
-  const ini = new Date(dataInicio);
-  const fim = dataFim ? new Date(dataFim) : new Date();
+  const ini = parseDateLocal(dataInicio);
+  if (!ini) return '';
+  const fim = dataFim ? (parseDateLocal(dataFim) || new Date()) : new Date();
   let anos = fim.getFullYear() - ini.getFullYear();
   let meses = fim.getMonth() - ini.getMonth();
   if (meses < 0) { anos--; meses += 12; }
@@ -219,12 +247,12 @@ const PerfilMissionario: React.FC = () => {
   const [missionario, setMissionario] = useState<Missionario | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [civilData, setCivilData] = useState<CivilData>({ data_nascimento: '', filiacao: '', cidade_estado: '', diocese: '', pais: '', naturalidade: '', rnm: '', cpf: '', titulo_eleitor: '', cnh: '', passaporte: '' });
+  const [civilData, setCivilData] = useState<CivilData>({ data_nascimento: '', filiacao: '', nome_pai: '', nome_mae: '', cidade_estado: '', diocese: '', pais: '', naturalidade: '', rnm: '', cpf: '', titulo_eleitor: '', cnh: '', passaporte: '' });
   const [enderecoData, setEnderecoData] = useState<EnderecoData>({ logradouro: '', complemento: '', bairro: '', cep: '', cidade_estado: '', celular_whatsapp: '', telefone_fixo: '', email_pessoal: '' });
-  const [religiososData, setReligiososData] = useState<ReligiososData>({ primeiros_votos_data: '', votos_perpetuos_data: '', lugar_profissao: '', diaconato_data: '', presbiterato_data: '', bispo_ordenante: '' });
+  const [religiososData, setReligiososData] = useState<ReligiososData>({ primeiros_votos_data: '', votos_perpetuos_data: '', lugar_profissao: '', diaconato_data: '', presbiterato_data: '', bispo_ordenante: '', data_batismo: '', data_primeira_comunhao: '', data_crisma: '', doc_batismo: '', doc_primeira_comunhao: '', doc_crisma: '' });
   const [casasHistorico, setCasasHistorico] = useState<CasaHistorico[]>([]);
   const [casasDisponiveis, setCasasDisponiveis] = useState<Casa[]>([]);
-  const [novaVinculacao, setNovaVinculacao] = useState({ casa_id: '', data_inicio: '', data_fim: '', funcao: '', is_superior: false });
+  const [novaVinculacao, setNovaVinculacao] = useState({ casa_id: '', data_inicio: '', data_fim: '', funcao: [] as string[], is_superior: false });
   const [isSaving, setIsSaving] = useState(false);
   // const [cepLoading, setCepLoading] = useState(false);
   const [nacionalidades, setNacionalidades] = useState<string[]>([]);
@@ -232,7 +260,9 @@ const PerfilMissionario: React.FC = () => {
   // Documents state
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [pendingDocDesc, setPendingDocDesc] = useState('');
+  const [pendingReligiousDocDesc, setPendingReligiousDocDesc] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const religiousFileInputRef = useRef<HTMLInputElement>(null);
 
   // Itinerary state
   const [itinerarioStages, setItinerarioStages] = useState<ItineraryStage[]>([]);
@@ -267,17 +297,17 @@ const PerfilMissionario: React.FC = () => {
   void API_URL;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { 
+  useEffect(() => {
     if (id) {
       const isOwner = authUser?.id === parseInt(id);
       const isManager = isAdminGeral || canEdit || isOconomo || isSuperior || isRegional;
-      
+
       if (!isManager && !isOwner) {
         navigate('/home');
         return;
       }
-      fetchData(); 
-    } 
+      fetchData();
+    }
   }, [id, authUser, isAdminGeral, canEdit, isOconomo, isSuperior, isRegional]);
 
   const fetchData = async () => {
@@ -296,10 +326,15 @@ const PerfilMissionario: React.FC = () => {
       ]);
 
       setMissionario(mRes.data);
-      if (civRes.data) setCivilData({
-        ...civRes.data,
-        data_nascimento: civRes.data.data_nascimento ? civRes.data.data_nascimento.split('T')[0] : ''
-      });
+      if (civRes.data) {
+        const parts = civRes.data.filiacao ? civRes.data.filiacao.split('/') : [];
+        setCivilData({
+          ...civRes.data,
+          nome_pai: parts[0] ? parts[0].trim() : '',
+          nome_mae: parts[1] ? parts[1].trim() : '',
+          data_nascimento: civRes.data.data_nascimento ? civRes.data.data_nascimento.split('T')[0] : ''
+        });
+      }
       if (endRes.data) setEnderecoData(endRes.data);
       if (relRes.data) setReligiososData({
         ...relRes.data,
@@ -307,16 +342,22 @@ const PerfilMissionario: React.FC = () => {
         votos_perpetuos_data: relRes.data.votos_perpetuos_data ? relRes.data.votos_perpetuos_data.split('T')[0] : '',
         diaconato_data: relRes.data.diaconato_data ? relRes.data.diaconato_data.split('T')[0] : '',
         presbiterato_data: relRes.data.presbiterato_data ? relRes.data.presbiterato_data.split('T')[0] : '',
+        data_batismo: relRes.data.data_batismo ? relRes.data.data_batismo.split('T')[0] : '',
+        data_primeira_comunhao: relRes.data.data_primeira_comunhao ? relRes.data.data_primeira_comunhao.split('T')[0] : '',
+        data_crisma: relRes.data.data_crisma ? relRes.data.data_crisma.split('T')[0] : '',
+        doc_batismo: relRes.data.doc_batismo || '',
+        doc_primeira_comunhao: relRes.data.doc_primeira_comunhao || '',
+        doc_crisma: relRes.data.doc_crisma || '',
       });
       setCasasDisponiveis(casasRes.data);
-      setCasasHistorico(histRes.data);
+      setCasasHistorico(histRes.data.map((h: any) => ({ ...h, funcao: h.funcao ? h.funcao.split(',').map((s: string) => s.trim()) : [] })));
       setNacionalidades(nacRes.data.nacionalidades || []);
       setDocumentos(docRes.data);
       setItinerarioStages(itinRes.data || []);
       setNit(civRes.data?.nit || '');
 
       // Load new sections
-      const [fRes, aRes, oRes, sRes, bRes, obsRes, qRes] = await Promise.all([
+      const [fRes, aRes, oRes, sRes, bRes, obsRes, qRes, contRes] = await Promise.all([
         api.get(`/usuarios/${id}/formacao-academica`),
         api.get(`/usuarios/${id}/atividade-missionaria`),
         api.get(`/usuarios/${id}/obras-realizadas`),
@@ -324,6 +365,7 @@ const PerfilMissionario: React.FC = () => {
         api.get(`/usuarios/${id}/contas-bancarias`),
         api.get(`/usuarios/${id}/observacoes-gerais`),
         api.get(`/usuarios/${id}/quadro-pessoal`),
+        api.get(`/usuarios/${id}/contatos`),
       ]);
       setFormacaoAcademica(fRes.data);
       setAtividadesMissionarias(aRes.data);
@@ -332,6 +374,7 @@ const PerfilMissionario: React.FC = () => {
       setContasBancarias(bRes.data);
       setObservacoesGerais(obsRes.data);
       setQuadroPessoal(qRes.data[0] || null);
+      setContatos(contRes.data || []);
 
       const sitRes = await api.get(`/usuarios/${id}/situacao`);
       if (sitRes.data) setSituacaoData({
@@ -374,8 +417,13 @@ const PerfilMissionario: React.FC = () => {
   const saveCivil = async () => {
     setIsSaving(true);
     try {
+      const filiacao = (civilData.nome_pai || civilData.nome_mae) ? `${civilData.nome_pai || ''} / ${civilData.nome_mae || ''}` : '';
+      const civilDataToSave = { ...civilData, filiacao };
+      delete civilDataToSave.nome_pai;
+      delete civilDataToSave.nome_mae;
+
       await Promise.all([
-        api.post(`/usuarios/${id}/dados-civis`, { ...civilData, nit }),
+        api.post(`/usuarios/${id}/dados-civis`, { ...civilDataToSave, nit }),
         api.post(`/usuarios/${id}/nacionalidades`, { nacionalidades })
       ]);
       alert('Dados civis atualizados!');
@@ -386,7 +434,12 @@ const PerfilMissionario: React.FC = () => {
   const saveReligiosos = async () => {
     setIsSaving(true);
     try {
-      await api.put(`/usuarios/${id}/dados-religiosos`, religiososData);
+      await api.put(`/usuarios/${id}/dados-religiosos`, {
+        ...religiososData,
+        data_batismo: religiososData.data_batismo || null,
+        data_primeira_comunhao: religiososData.data_primeira_comunhao || null,
+        data_crisma: religiososData.data_crisma || null,
+      });
 
       // Update main user status and roles
       await api.put(`/usuarios/${id}`, {
@@ -406,42 +459,33 @@ const PerfilMissionario: React.FC = () => {
     finally { setIsSaving(false); }
   };
 
-  const uploadSituacaoDoc = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof SituacaoData) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('arquivo', file);
-    formData.append('descricao', `Documento Situação: ${field}`);
-
-    setIsSaving(true);
-    try {
-      const res = await api.post(`/usuarios/${id}/documentos`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setSituacaoData(prev => ({ ...prev, [field]: res.data.url }));
-      alert('Documento enviado com sucesso!');
-    } catch { alert('Erro ao enviar documento'); }
-    finally { setIsSaving(false); }
-  };
 
   const saveEndereco = async () => {
     setIsSaving(true);
     try {
-      await api.post(`/usuarios/${id}/endereco-contato`, enderecoData);
-      alert('Endereço e contato atualizados!');
-    } catch { alert('Erro ao salvar endereço'); }
+      await Promise.all([
+        api.post(`/usuarios/${id}/endereco-contato`, enderecoData),
+        api.post(`/usuarios/${id}/contatos`, { contatos })
+      ]);
+      alert('Endereço e contatos atualizados!');
+    } catch { alert('Erro ao salvar endereço e contatos'); }
     finally { setIsSaving(false); }
   };
 
   const addCasa = async () => {
     try {
       await api.post(`/usuarios/${id}/casas-historico`, {
-        ...novaVinculacao,
+        casa_id: novaVinculacao.casa_id,
+        data_inicio: novaVinculacao.data_inicio,
         data_fim: novaVinculacao.data_fim || null,
+        funcao: Array.isArray(novaVinculacao.funcao) ? novaVinculacao.funcao.join(',') : (novaVinculacao.funcao || ''),
+        is_superior: novaVinculacao.is_superior,
+        pm: (novaVinculacao as any).pm || null,
+        tipo: (novaVinculacao as any).tipo || null,
+        pais: (novaVinculacao as any).pais || null,
       });
       fetchData();
-      setNovaVinculacao({ casa_id: '', data_inicio: '', data_fim: '', funcao: '', is_superior: false });
+      setNovaVinculacao({ casa_id: '', data_inicio: '', data_fim: '', funcao: [] as string[], is_superior: false, pm: '', tipo: '', pais: 'Brasil' } as any);
     } catch { alert('Erro ao vincular casa'); }
   };
 
@@ -469,6 +513,30 @@ const PerfilMissionario: React.FC = () => {
       });
       setPendingDocDesc('');
       if (fileInputRef.current) fileInputRef.current.value = ''; // reset input
+      fetchData();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }, message?: string };
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao enviar documento';
+      alert(`Erro ao enviar documento: ${msg}`);
+    } finally { setIsSaving(false); }
+  };
+
+  const uploadReligiousDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!pendingReligiousDocDesc.trim()) return alert('Informe a descrição do documento');
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    formData.append('descricao', pendingReligiousDocDesc);
+
+    setIsSaving(true);
+    try {
+      await api.post(`/usuarios/${id}/documentos`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setPendingReligiousDocDesc('');
+      if (religiousFileInputRef.current) religiousFileInputRef.current.value = ''; // reset input
       fetchData();
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }, message?: string };
@@ -506,7 +574,7 @@ const PerfilMissionario: React.FC = () => {
         is_superior: missionario.is_superior,
         proximos_passos: missionario.proximos_passos,
         role: 'PADRE',
-        status: 'ATIVO' 
+        status: 'ATIVO'
       };
 
       if (newPassword.trim()) {
@@ -516,8 +584,8 @@ const PerfilMissionario: React.FC = () => {
       await api.put(`/usuarios/${id}`, payload);
       alert('Informações atualizadas com sucesso!');
       setNewPassword('');
-    } catch (err: any) { 
-      alert('Erro ao salvar informações: ' + (err.response?.data?.message || err.message)); 
+    } catch (err: any) {
+      alert('Erro ao salvar informações: ' + (err.response?.data?.message || err.message));
     }
     finally { setIsSaving(false); }
   };
@@ -606,1144 +674,1220 @@ const PerfilMissionario: React.FC = () => {
   if (isLoading) return <div className="perfil-loading"><Loader2 className="animate-spin" size={40} /><p>{t('profile.loading')}</p></div>;
   if (!missionario) return <div className="perfil-loading"><AlertCircle size={40} /><p>{t('profile.not_found')}</p></div>;
 
-  const allTabs = [
+  // Tabs principais (só Dados Civis e Contatos)
+  const mainTabs = [
     { key: 'dados', label: '1. Dados Civis', icon: <User size={16} />, perm: 'dados_civis' },
     { key: 'contatos', label: '2. Contatos', icon: <MapPin size={16} />, perm: 'contatos' },
+  ];
+
+  // Itens da sidebar esquerda em cascata (abas que saíram do menu)
+  const sidebarItems = [
     { key: 'religiosos', label: '3. Dados Religiosos', icon: <BookOpen size={16} />, perm: 'dados_religiosos' },
     { key: 'itinerario', label: '4. Itinerário Formativo', icon: <Activity size={16} />, perm: 'itinerario_formativo' },
     { key: 'carreira', label: '5/6/11. Formação & Missão', icon: <GraduationCap size={16} />, perm: 'formacao_academica' },
     { key: 'saude', label: '7-10. Saúde & Financeiro', icon: <ShieldCheck size={16} />, perm: 'saude' },
-    { key: 'casas', label: 'Presença Missionária', icon: <HomeIcon size={16} />, perm: null }, // Presença always visible for admins
+    { key: 'casas', label: 'Presença Missionária', icon: <HomeIcon size={16} />, perm: null },
     { key: 'acesso', label: 'Acesso', icon: <Lock size={16} />, perm: null },
     { key: 'obs', label: '12. Observações', icon: <FileText size={16} />, perm: 'observacoes' },
     { key: 'permissoes', label: 'Permissões', icon: <ShieldCheck size={16} />, perm: null },
   ];
 
-  // Filter tabs for PADRE role (Missionary)
-  const TABS = allTabs.filter(tab => {
+  const TABS = mainTabs.filter(tab => {
     if (isAdminGeral || (canEdit && authUser?.id !== missionario.id)) return true;
-    if (!tab.perm) return true; // Always show tabs without specific permission requirements
+    if (!tab.perm) return true;
     return !!missionario.permissoes?.[tab.perm];
   });
 
-    return (
-      <div className="page-container">
-        <div className="perfil-header">
-          <button className="btn-back" onClick={() => navigate('/missionarios')}>
-            <ChevronLeft size={18} /> {t('profile.back_btn')}
-          </button>
-          <div className="perfil-id">ID: #{missionario.id}</div>
-        </div>
+  const SIDEBAR = sidebarItems.filter(tab => {
+    if (isAdminGeral || (canEdit && authUser?.id !== missionario.id)) return true;
+    if (!tab.perm) return true;
+    return !!missionario.permissoes?.[tab.perm];
+  });
 
-        <div className="perfil-top-card">
-          <div className="perfil-avatar-wrapper">
-             <div className="perfil-avatar">{missionario.nome.charAt(0)}</div>
-             <div className={`perfil-status-dot ${(missionario.situacao || '').toLowerCase()}`}></div>
-          </div>
-          <div className="perfil-main-info">
-            <div className="perfil-name-section">
-               <h1>{missionario.nome}</h1>
-               <span className={`situacao-tag-premium ${(missionario.situacao || '').toLowerCase()}`}>
-                  {missionario.situacao}
-               </span>
+  return (
+    <div className="page-container">
+      <div className="perfil-header">
+        <button className="btn-back" onClick={() => navigate('/missionarios')}>
+          <ChevronLeft size={18} /> {t('profile.back_btn')}
+        </button>
+        <div className="perfil-id">ID: #{missionario.id}</div>
+      </div>
+
+      <div className="perfil-top-card">
+        <div className="perfil-avatar-wrapper">
+          <div className="perfil-avatar">{missionario.nome.charAt(0)}</div>
+          <div className={`perfil-status-dot ${(missionario.situacao || '').toLowerCase()}`}></div>
+        </div>
+        <div className="perfil-main-info" style={{ flex: 1 }}>
+          <div className="perfil-name-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <h1>{missionario.nome}</h1>
+              <span className={`situacao-tag-premium ${(missionario.situacao || '').toLowerCase()}`}>
+                {missionario.situacao}
+              </span>
             </div>
-            <div className="perfil-badges-row">
-               <div className="perfil-badge-item">
-                  <User size={14} />
-                  <span>{t('profile.missionary_role')}</span>
-               </div>
-               {!!missionario.is_oconomo && (
-                  <div className="perfil-badge-item oconomo">
-                     <ShieldCheck size={14} />
-                     <span>{t('profile.oconomo_badge')}</span>
-                  </div>
-               )}
-               {!!missionario.is_superior && (
-                  <div className="perfil-badge-item superior">
-                     <Star size={14} />
-                     <span>{t('profile.superior_badge')}</span>
-                  </div>
-               )}
+            {canEdit && (
+              <button
+                className="btn-edit-access"
+                onClick={() => setActiveTab('acesso')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  background: '#013375',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <Lock size={14} />
+                Editar Minhas Informações
+              </button>
+            )}
+          </div>
+          <div className="perfil-badges-row">
+            <div className="perfil-badge-item">
+              <User size={14} />
+              <span>{t('profile.missionary_role')}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="perfil-tabs">
-          {TABS.map(tab => (
-            <button key={tab.key} className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* ── Layout principal: sidebar esquerda + conteúdo ── */}
+      <div className="perfil-layout">
 
-        <div className="perfil-content">
-          {/* --- 1. DADOS CIVIS --- */}
-          {activeTab === 'dados' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <h3 className="section-title"><User size={16} /> 1. Dados Civis</h3>
-                <div className="form-grid-3">
+        {/* Sidebar esquerda em cascata */}
+        <aside className="perfil-sidebar">
+          <div className="sidebar-section-title">Mais Informações</div>
+          <nav className="sidebar-nav">
+            {SIDEBAR.map(item => (
+              <button
+                key={item.key}
+                className={`sidebar-nav-item ${activeTab === item.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(item.key)}
+              >
+                <span className="sidebar-nav-icon">{item.icon}</span>
+                <span className="sidebar-nav-label">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-                  {/* Data de Nascimento */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.birth_date')}</label>
-                    <input type="date" value={civilData.data_nascimento} onChange={e => setCivilData({ ...civilData, data_nascimento: e.target.value })} disabled={!canEdit} />
-                  </div>
+        {/* Área principal com tabs Dados Civis e Contatos */}
+        <div className="perfil-main-area">
+          <div className="perfil-tabs">
+            {TABS.map(tab => (
+              <button key={tab.key} className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
 
-                  {/* Filiação — texto puro, sem números */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.parents')}</label>
-                    <input
-                      type="text"
-                      value={civilData.filiacao}
-                      onChange={e => {
-                        const v = e.target.value.replace(/[0-9]/g, '');
-                        setCivilData({ ...civilData, filiacao: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="Nome dos pais"
-                    />
-                    {/\d/.test(civilData.filiacao || '') && <span className="field-hint error">⚠ Somente letras são permitidas</span>}
-                  </div>
+          <div className="perfil-content">
+            {/* --- 1. DADOS CIVIS --- */}
+            {activeTab === 'dados' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <h3 className="section-title"><User size={16} /> 1. Dados Civis</h3>
+                  <div className="form-grid-3">
 
-                  {/* Cidade/Estado nascimento — texto */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.birth_place_city')}</label>
-                    <input
-                      type="text"
-                      value={civilData.cidade_estado}
-                      onChange={e => {
-                        const v = e.target.value.replace(/[0-9]/g, '');
-                        setCivilData({ ...civilData, cidade_estado: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="Ex: São Paulo, SP"
-                    />
-                  </div>
-
-                  {/* País — texto */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.country')}</label>
-                    <input
-                      type="text"
-                      list="paises"
-                      value={civilData.pais}
-                      onChange={e => {
-                        const v = e.target.value.replace(/[0-9]/g, '');
-                        setCivilData({ ...civilData, pais: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="Ex: Brasil"
-                    />
-                    <datalist id="paises">{PAISES_COMMON.map(p => <option key={p} value={p} />)}</datalist>
-                  </div>
-
-                  {/* Naturalidade — texto */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.birth_place_natural')}</label>
-                    <input
-                      type="text"
-                      value={civilData.naturalidade}
-                      onChange={e => {
-                        const v = e.target.value.replace(/[0-9]/g, '');
-                        setCivilData({ ...civilData, naturalidade: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="Ex: Brasileiro"
-                    />
-                  </div>
-
-                  {/* Diocese — texto */}
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.diocese')}</label>
-                    <input
-                      type="text"
-                      value={civilData.diocese}
-                      onChange={e => {
-                        const v = e.target.value.replace(/[0-9]/g, '');
-                        setCivilData({ ...civilData, diocese: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="Ex: Diocese de São Paulo"
-                    />
-                  </div>
-
-                  {/* RNM — até 9 dígitos */}
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      RG / RNM / CI / DI <FileText size={14} style={{ opacity: 0.5 }} />
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={civilData.rnm}
-                      maxLength={9}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 9);
-                        setCivilData({ ...civilData, rnm: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="000000000"
-                    />
-                  </div>
-
-                  {/* CPF — exatamente 11 dígitos */}
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      CPF <FileText size={14} style={{ opacity: 0.5 }} />
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={civilData.cpf}
-                      maxLength={11}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 11);
-                        setCivilData({ ...civilData, cpf: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="00000000000"
-                    />
-                  </div>
-
-                  {/* Título de Eleitor — exatamente 12 dígitos */}
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      Título Eleitor <FileText size={14} style={{ opacity: 0.5 }} />
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={civilData.titulo_eleitor}
-                      maxLength={12}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 12);
-                        setCivilData({ ...civilData, titulo_eleitor: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="000000000000"
-                    />
-                  </div>
-
-                  {/* CNH — exatamente 11 dígitos */}
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      CNH <FileText size={14} style={{ opacity: 0.5 }} />
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={civilData.cnh}
-                      maxLength={11}
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 11);
-                        setCivilData({ ...civilData, cnh: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="00000000000"
-                    />
-                  </div>
-
-                  {/* Passaporte — alfanumérico, até 9 chars, letras maiúsculas */}
-                  <div className="form-group">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      Passaporte <FileText size={14} style={{ opacity: 0.5 }} />
-                    </label>
-                    <input
-                      type="text"
-                      value={civilData.passaporte}
-                      maxLength={9}
-                      onChange={e => {
-                        const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
-                        setCivilData({ ...civilData, passaporte: v });
-                      }}
-                      disabled={!canEdit}
-                      placeholder="AA000000"
-                      style={{ fontFamily: 'monospace', letterSpacing: '2px' }}
-                    />
-                  </div>
-
-                </div>
-
-                <div className="section-header-flex" style={{ marginTop: '20px', marginBottom: '10px' }}>
-                  <h4 className="wizard-divider-lite">{t('missionaries.wizard.civil.nationalities')}</h4>
-                  {canEdit && (
-                    <button className="btn-action-lite-text" onClick={() => setNacionalidades([...nacionalidades, ''])}>
-                      <Plus size={14} /> {t('missionaries.wizard.civil.add_btn')}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  {nacionalidades.map((nac, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '5px' }}>
-                      <input type="text" value={nac} onChange={e => {
-                        const nn = [...nacionalidades];
-                        nn[idx] = e.target.value;
-                        setNacionalidades(nn);
-                      }} placeholder="Nacionalidade..." style={{ flex: 1 }} disabled={!canEdit} />
-                      {canEdit && idx > 0 && <button onClick={() => setNacionalidades(nacionalidades.filter((_, i) => i !== idx))} className="btn-action-lite delete"><Trash2 size={16} /></button>}
+                    {/* Data de Nascimento */}
+                    <div className="form-group">
+                      <label>{t('missionaries.wizard.civil.birth_date')}</label>
+                      <input type="date" value={civilData.data_nascimento} onChange={e => setCivilData({ ...civilData, data_nascimento: e.target.value })} disabled={!canEdit} />
                     </div>
-                  ))}
-                </div>
-                {canEdit && (
-                  <div className="section-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-save-perfil" onClick={saveCivil} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      {t('profile.actions.save_civil')}
-                    </button>
-                  </div>
-                )}
-              </div>
 
-
-
-              {/* Seção de Documentos dentro da aba Dados */}
-              <div className="section-card docs-section">
-                <h3 className="section-title"><FileText size={16} /> {t('profile.sections.docs')}</h3>
-
-                {canEdit && (
-                  <div className="doc-upload-zone">
-                    <div className="doc-upload-icon-area">
-                      <Upload size={28} className="doc-upload-icon" />
+                    {/* Nome do Pai */}
+                    <div className="form-group">
+                      <label>Nome do Pai</label>
+                      <input
+                        type="text"
+                        value={civilData.nome_pai || ''}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setCivilData({ ...civilData, nome_pai: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Nome do pai"
+                      />
                     </div>
-                    <div className="doc-upload-fields">
-                      <div className="form-group">
-                        <label>{t('missionaries.wizard.docs.placeholder')}</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: RG, Passaporte, CPF..."
-                          value={pendingDocDesc}
-                          onChange={e => setPendingDocDesc(e.target.value)}
-                        />
+
+                    {/* Nome da Mãe */}
+                    <div className="form-group">
+                      <label>Nome da Mãe</label>
+                      <input
+                        type="text"
+                        value={civilData.nome_mae || ''}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setCivilData({ ...civilData, nome_mae: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Nome da mãe"
+                      />
+                    </div>
+
+                    {/* Naturalidade — Cidade/Estado nascimento */}
+                    <div className="form-group">
+                      <label>{t('missionaries.wizard.civil.birth_place_city')}</label>
+                      <input
+                        type="text"
+                        value={civilData.cidade_estado}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setCivilData({ ...civilData, cidade_estado: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Ex: São Paulo, SP"
+                      />
+                    </div>
+
+                    {/* País — texto */}
+                    <div className="form-group">
+                      <label>{t('missionaries.wizard.civil.country')}</label>
+                      <input
+                        type="text"
+                        list="paises"
+                        value={civilData.pais}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setCivilData({ ...civilData, pais: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Ex: Brasil"
+                      />
+                      <datalist id="paises">{PAISES_COMMON.map(p => <option key={p} value={p} />)}</datalist>
+                    </div>
+
+                    {/* Diocese — texto */}
+                    <div className="form-group">
+                      <label>{t('missionaries.wizard.civil.diocese')}</label>
+                      <input
+                        type="text"
+                        value={civilData.diocese}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setCivilData({ ...civilData, diocese: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Ex: Diocese de São Paulo"
+                      />
+                    </div>
+
+                    {/* RNM — até 10 dígitos */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        RG / RNM / CI / DI <FileText size={14} style={{ opacity: 0.5 }} />
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={civilData.rnm}
+                        maxLength={10}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setCivilData({ ...civilData, rnm: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="000000000"
+                      />
+                    </div>
+
+                    {/* CPF — exatamente 11 dígitos */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        CPF <FileText size={14} style={{ opacity: 0.5 }} />
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={civilData.cpf}
+                        maxLength={11}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                          setCivilData({ ...civilData, cpf: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="00000000000"
+                      />
+                    </div>
+
+                    {/* Título de Eleitor — exatamente 12 dígitos */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        Título Eleitor <FileText size={14} style={{ opacity: 0.5 }} />
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={civilData.titulo_eleitor}
+                        maxLength={12}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+                          setCivilData({ ...civilData, titulo_eleitor: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="000000000000"
+                      />
+                    </div>
+
+                    {/* CNH — exatamente 11 dígitos */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        CNH <FileText size={14} style={{ opacity: 0.5 }} />
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={civilData.cnh}
+                        maxLength={11}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                          setCivilData({ ...civilData, cnh: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="00000000000"
+                      />
+                    </div>
+
+                    {/* Passaporte — alfanumérico, até 9 chars, letras maiúsculas */}
+                    <div className="form-group">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        Passaporte <FileText size={14} style={{ opacity: 0.5 }} />
+                      </label>
+                      <input
+                        type="text"
+                        value={civilData.passaporte}
+                        maxLength={9}
+                        onChange={e => {
+                          const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+                          setCivilData({ ...civilData, passaporte: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="AA000000"
+                        style={{ fontFamily: 'monospace', letterSpacing: '2px' }}
+                      />
+                    </div>
+
+                  </div>
+
+                  <div className="section-header-flex" style={{ marginTop: '20px', marginBottom: '10px' }}>
+                    <h4 className="wizard-divider-lite">{t('missionaries.wizard.civil.nationalities')}</h4>
+                    {canEdit && (
+                      <button className="btn-action-lite-text" onClick={() => setNacionalidades([...nacionalidades, ''])}>
+                        <Plus size={14} /> {t('missionaries.wizard.civil.add_btn')}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {nacionalidades.map((nac, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '5px' }}>
+                        <input type="text" value={nac} onChange={e => {
+                          const nn = [...nacionalidades];
+                          nn[idx] = e.target.value;
+                          setNacionalidades(nn);
+                        }} placeholder="Nacionalidade..." style={{ flex: 1 }} disabled={!canEdit} />
+                        {canEdit && idx > 0 && <button onClick={() => setNacionalidades(nacionalidades.filter((_, i) => i !== idx))} className="btn-action-lite delete"><Trash2 size={16} /></button>}
                       </div>
-                      <input type="file" ref={fileInputRef} onChange={uploadDocument} style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png" />
-                      <button
-                        className="btn-upload-doc"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                        {isSaving ? 'Enviando...' : t('profile.actions.upload_btn')}
+                    ))}
+                  </div>
+                  {canEdit && (
+                    <div className="section-actions" style={{ marginTop: '20px' }}>
+                      <button className="btn-save-perfil" onClick={saveCivil} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                        {t('profile.actions.save_civil')}
                       </button>
                     </div>
-                    <p className="doc-upload-hint">PDF, JPG ou PNG · máx. 20MB</p>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {documentos.length === 0 ? (
-                  <p className="empty-msg">Nenhum documento anexado.</p>
-                ) : (
-                  <div className="docs-grid">
-                    {documentos.map(doc => {
-                      const ext = (doc.tipo_arquivo || 'file').toUpperCase();
-                      const isPdf = ext === 'PDF';
-                      const isImg = ['PNG', 'JPG', 'JPEG'].includes(ext);
+
+
+                {/* Seção de Documentos dentro da aba Dados */}
+                <div className="section-card docs-section">
+                  <h3 className="section-title"><FileText size={16} /> {t('profile.sections.docs')}</h3>
+
+                  {canEdit && (
+                    <div className="doc-upload-zone">
+                      <div className="doc-upload-icon-area">
+                        <Upload size={28} className="doc-upload-icon" />
+                      </div>
+                      <div className="doc-upload-fields">
+                        <div className="form-group">
+                          <label>{t('missionaries.wizard.docs.placeholder')}</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: RG, Passaporte, CPF..."
+                            value={pendingDocDesc}
+                            onChange={e => setPendingDocDesc(e.target.value)}
+                          />
+                        </div>
+                        <input type="file" ref={fileInputRef} onChange={uploadDocument} style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png" />
+                        <button
+                          className="btn-upload-doc"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                          {isSaving ? 'Enviando...' : t('profile.actions.upload_btn')}
+                        </button>
+                      </div>
+                      <p className="doc-upload-hint">PDF, JPG ou PNG · máx. 20MB</p>
+                    </div>
+                  )}
+
+                  {documentos.length === 0 ? (
+                    <p className="empty-msg">Nenhum documento anexado.</p>
+                  ) : (
+                    <div className="docs-grid">
+                      {documentos.map(doc => {
+                        const ext = (doc.tipo_arquivo || 'file').toUpperCase();
+                        const isPdf = ext === 'PDF';
+                        const isImg = ['PNG', 'JPG', 'JPEG'].includes(ext);
+                        return (
+                          <div key={doc.id} className="doc-card">
+                            <div className={`doc-card-icon ${isPdf ? 'pdf' : isImg ? 'img' : 'file'}`}>
+                              {isPdf ? <FileText size={22} /> : isImg ? <Eye size={22} /> : <FileText size={22} />}
+                              <span className="doc-type-badge">{ext}</span>
+                            </div>
+                            <div className="doc-card-body">
+                              <span className="doc-card-name" title={doc.descricao}>{doc.descricao}</span>
+                              <span className="doc-card-meta">
+                                {doc.arquivo_nome && <span className="doc-filename" title={doc.arquivo_nome}>{doc.arquivo_nome}</span>}
+                                <span className="doc-date">· {new Date(doc.data_upload).toLocaleDateString('pt-BR')}</span>
+                              </span>
+                            </div>
+                            <div className="doc-card-actions">
+                              <a href={getFileUrl(doc.url) || '#'} target="_blank" rel="noreferrer" className="doc-btn view" title="Visualizar">
+                                <Eye size={15} />
+                              </a>
+                              <a href={getFileUrl(doc.url) || '#'} download={doc.arquivo_nome} className="doc-btn download" title="Download">
+                                <Download size={15} />
+                              </a>
+                              {canEdit && (
+                                <button className="doc-btn delete" onClick={() => removeDocument(doc.id)} title="Excluir">
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- 2. CONTATOS --- */}
+            {activeTab === 'contatos' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><MapPin size={16} /> 2. Contatos</h3>
+                    {canEdit && contatos.length < 3 && (
+                      <button className="btn-action-lite-text" onClick={() => setContatos([...contatos, { parentesco: '', nome: '', endereco: '', telefone: '', email: '' }])}>
+                        <Plus size={16} /> Adicionar Contato
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="contatos-list" style={{ marginTop: '20px' }}>
+                    {contatos.length === 0 && (
+                      <p style={{ opacity: 0.6, textAlign: 'center', padding: '20px' }}>Nenhum contato cadastrado. Adicione até 3 contatos.</p>
+                    )}
+                    {contatos.map((contato, idx) => (
+                      <div key={idx} className="contato-item-premium" style={{
+                        padding: '20px',
+                        background: '#f8fafc',
+                        borderRadius: '12px',
+                        marginBottom: '20px',
+                        border: '1px solid #e2e8f0',
+                        position: 'relative'
+                      }}>
+                        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                          {canEdit && (
+                            <button className="btn-action-lite delete" onClick={() => setContatos(contatos.filter((_, i) => i !== idx))}>
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="form-grid-3">
+                          <div className="form-group">
+                            <label>Parentesco</label>
+                            <select
+                              value={['Pai', 'Mãe', 'Tio(a)', 'Primo'].includes(contato.parentesco) || contato.parentesco === '' ? contato.parentesco : 'Outros'}
+                              onChange={e => {
+                                const val = e.target.value;
+                                const newC = [...contatos];
+                                newC[idx].parentesco = val === 'Outros' ? 'Outros' : val;
+                                setContatos(newC);
+                              }}
+                              disabled={!canEdit}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: 'white'
+                              }}
+                            >
+                              <option value="">Selecione...</option>
+                              <option value="Pai">Pai</option>
+                              <option value="Mãe">Mãe</option>
+                              <option value="Tio(a)">Tio(a)</option>
+                              <option value="Primo">Primo</option>
+                              <option value="Outros">Outros</option>
+                            </select>
+
+                            {(!['Pai', 'Mãe', 'Tio(a)', 'Primo'].includes(contato.parentesco) && contato.parentesco !== '') || contato.parentesco === 'Outros' ? (
+                              <input
+                                type="text"
+                                placeholder="Qual parentesco? (ex: Padrasto)"
+                                value={contato.parentesco === 'Outros' ? '' : contato.parentesco}
+                                onChange={e => {
+                                  const newC = [...contatos];
+                                  newC[idx].parentesco = e.target.value;
+                                  setContatos(newC);
+                                }}
+                                disabled={!canEdit}
+                                style={{ marginTop: '8px', width: '100%' }}
+                              />
+                            ) : null}
+                          </div>
+                          <div className="form-group">
+                            <label>Nome</label>
+                            <input
+                              type="text"
+                              placeholder="Nome..."
+                              value={contato.nome}
+                              onChange={e => {
+                                const newC = [...contatos];
+                                newC[idx].nome = e.target.value;
+                                setContatos(newC);
+                              }}
+                              disabled={!canEdit}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Telefone</label>
+                            <input
+                              type="text"
+                              placeholder="(00) 00000-0000"
+                              value={contato.telefone}
+                              onChange={e => {
+                                const newC = [...contatos];
+                                newC[idx].telefone = e.target.value;
+                                setContatos(newC);
+                              }}
+                              disabled={!canEdit}
+                            />
+                          </div>
+                          <div className="form-group full">
+                            <label>Endereço</label>
+                            <input
+                              type="text"
+                              placeholder="Endereço completo..."
+                              value={contato.endereco}
+                              onChange={e => {
+                                const newC = [...contatos];
+                                newC[idx].endereco = e.target.value;
+                                setContatos(newC);
+                              }}
+                              disabled={!canEdit}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>E-mail</label>
+                            <input
+                              type="email"
+                              placeholder="email@exemplo.com"
+                              value={contato.email}
+                              onChange={e => {
+                                const newC = [...contatos];
+                                newC[idx].email = e.target.value;
+                                setContatos(newC);
+                              }}
+                              disabled={!canEdit}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {canEdit && (
+                    <div className="section-actions" style={{ marginTop: '20px' }}>
+                      <button className="btn-save-perfil" onClick={saveEndereco} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                        Salvar Contatos
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- ACESSO AO SISTEMA --- */}
+            {activeTab === 'acesso' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <h3 className="section-title"><ShieldCheck size={16} /> Acesso ao Sistema</h3>
+                  <div className="form-grid-2">
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                      <label>Nome</label>
+                      <input
+                        type="text"
+                        value={missionario.nome}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[0-9]/g, '');
+                          setMissionario({ ...missionario, nome: v });
+                        }}
+                        disabled={!canEdit}
+                        placeholder="Nome completo"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>E-mail de Login</label>
+                      <input
+                        type="email"
+                        value={missionario.login}
+                        onChange={e => setMissionario({ ...missionario, login: e.target.value })}
+                        disabled={!canEdit}
+                        placeholder="email@exemplo.com"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Nova Senha (deixe em branco para não alterar)</label>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          disabled={!canEdit}
+                          placeholder="••••••••"
+                          style={{ width: '100%' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}
+                        >
+                          {showPassword ? <Eye size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <div className="section-actions" style={{ marginTop: '20px' }}>
+                      <button className="btn-save-perfil" onClick={saveBasicInfo} disabled={isSaving}>
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Atualizar Acesso
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- RELIGIOSOS & ITINERÁRIO --- */}
+            {activeTab === 'religiosos' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <h3 className="section-title"><BookOpen size={16} /> {t('profile.sections.religious')}</h3>
+                  <div className="form-grid-3">
+                    <div className="form-group"><label>Batismo</label><input type="date" value={religiososData.data_batismo} onChange={e => setReligiososData({ ...religiososData, data_batismo: e.target.value })} disabled={!canEdit} /></div>
+                    <div className="form-group"><label>1ª Comunhão</label><input type="date" value={religiososData.data_primeira_comunhao} onChange={e => setReligiososData({ ...religiososData, data_primeira_comunhao: e.target.value })} disabled={!canEdit} /></div>
+                    <div className="form-group"><label>Crisma</label><input type="date" value={religiososData.data_crisma} onChange={e => setReligiososData({ ...religiososData, data_crisma: e.target.value })} disabled={!canEdit} /></div>
+                  </div>
+
+                  <div className="section-title mt-4">
+                    <h3>Anexar Certidão</h3>
+                  </div>
+                  <div className="form-grid-1">
+                    <div className="form-group full">
+                      <label>Descrição do documento</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Certidão de Batismo"
+                        value={pendingReligiousDocDesc}
+                        onChange={e => setPendingReligiousDocDesc(e.target.value)}
+                        disabled={!canEdit}
+                      />
+                    </div>
+                    <div className="form-group full">
+                      <label>Anexar arquivo</label>
+                      <div className="file-input-wrapper" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input type="file" ref={religiousFileInputRef} onChange={uploadReligiousDocument} style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png" disabled={!canEdit} />
+                        <button type="button" className="btn-upload-doc" onClick={() => religiousFileInputRef.current?.click()} disabled={!canEdit || isSaving}>
+                          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                          {isSaving ? 'Enviando...' : 'Selecionar arquivo'}
+                        </button>
+                        <span style={{ color: '#555', fontSize: '0.95rem' }}>PDF/JPG/PNG</span>
+                      </div>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <div className="section-actions" style={{ marginTop: '20px' }}>
+                      <button className="btn-save-perfil" onClick={saveReligiosos} disabled={isSaving}>
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={18} />}
+                        {t('profile.actions.save_religious')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- 4. ITINERÁRIO FORMATIVO --- */}
+            {activeTab === 'itinerario' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <h3 className="section-title"><Activity size={16} /> 4. Itinerário Formativo</h3>
+                  <div className="itinerary-full-grid">
+                    <div className="wizard-divider-lite" style={{ gridColumn: '1 / -1' }}>4.1 Formação Inicial</div>
+                    {[
+                      { label: '4.1.1 Seminário Menor', etapa: '4.1.1' },
+                      { label: '4.1.2 Propedêutico', etapa: '4.1.2' },
+                      { label: '4.1.3 Filosofia', etapa: '4.1.3' },
+                      { label: '4.1.4 Postulado', etapa: '4.1.4' },
+                      { label: '4.1.5 Noviciado', etapa: '4.1.5' },
+                      { label: '4.1.6 Teologia', etapa: '4.1.6' },
+                      { label: '4.1.7 Tirocínio', etapa: '4.1.7' },
+                    ].map((seg) => {
+                      const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
                       return (
-                        <div key={doc.id} className="doc-card">
-                          <div className={`doc-card-icon ${isPdf ? 'pdf' : isImg ? 'img' : 'file'}`}>
-                            {isPdf ? <FileText size={22} /> : isImg ? <Eye size={22} /> : <FileText size={22} />}
-                            <span className="doc-type-badge">{ext}</span>
+                        <div key={seg.etapa} className="itinerary-row-card">
+                          <div className="itin-label">{seg.label}</div>
+                          <div className="itin-inputs">
+                            <input type="text" placeholder="Local" value={stage.local} onChange={e => {
+                              const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, local: e.target.value }];
+                              setItinerarioStages(ns);
+                            }} disabled={!canEdit} />
+                            <input type="text" placeholder="Período" value={stage.periodo} onChange={e => {
+                              const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, periodo: e.target.value }];
+                              setItinerarioStages(ns);
+                            }} disabled={!canEdit} />
+                            <div className="itin-doc-actions">
+                              {stage.doc_path ? (
+                                <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
+                              ) : (
+                                <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
+                                  <Plus size={14} /> Anexar
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className="doc-card-body">
-                            <span className="doc-card-name" title={doc.descricao}>{doc.descricao}</span>
-                            <span className="doc-card-meta">
-                              {doc.arquivo_nome && <span className="doc-filename" title={doc.arquivo_nome}>{doc.arquivo_nome}</span>}
-                              <span className="doc-date">· {new Date(doc.data_upload).toLocaleDateString('pt-BR')}</span>
-                            </span>
-                          </div>
-                          <div className="doc-card-actions">
-                            <a href={getFileUrl(doc.url) || '#'} target="_blank" rel="noreferrer" className="doc-btn view" title="Visualizar">
-                              <Eye size={15} />
-                            </a>
-                            <a href={getFileUrl(doc.url) || '#'} download={doc.arquivo_nome} className="doc-btn download" title="Download">
-                              <Download size={15} />
-                            </a>
-                            {canEdit && (
-                              <button className="doc-btn delete" onClick={() => removeDocument(doc.id)} title="Excluir">
-                                <Trash2 size={15} />
-                              </button>
-                            )}
+                        </div>
+                      );
+                    })}
+
+                    <div className="wizard-divider-lite" style={{ gridColumn: '1 / -1', marginTop: '20px' }}>4.2 Vida Religiosa & 4.3 Ministérios</div>
+                    {[
+                      { label: '4.2.1 Primeira Profissão', etapa: '4.2.1' },
+                      { label: '4.2.2 Renovação Votos', etapa: '4.2.2' },
+                      { label: '4.2.3 Profissão Perpétua', etapa: '4.2.3' },
+                      { label: '4.3.1 Leitorado', etapa: '4.3.1' },
+                      { label: '4.3.2 Acolitado', etapa: '4.3.2' },
+                      { label: '4.3.3 Diaconato', etapa: '4.3.3' },
+                      { label: '4.3.4 Presbiterato', etapa: '4.3.4' },
+                      { label: '4.4 Destinação', etapa: '4.4' },
+                    ].map((seg) => {
+                      const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
+                      return (
+                        <div key={seg.etapa} className="itinerary-row-card simple">
+                          <div className="itin-label">{seg.label}</div>
+                          <div className="itin-inputs">
+                            <input type="text" placeholder="Observação/Lugar" value={stage.local} onChange={e => {
+                              const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, local: e.target.value }];
+                              setItinerarioStages(ns);
+                            }} disabled={!canEdit} />
+                            <div className="itin-doc-actions">
+                              {stage.doc_path ? (
+                                <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
+                              ) : (
+                                <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
+                                  <Plus size={14} /> Doc
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* --- 2. CONTATOS --- */}
-          {activeTab === 'contatos' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><MapPin size={16} /> 2. Contatos</h3>
-                  {canEdit && contatos.length < 3 && (
-                    <button className="btn-action-lite-text" onClick={() => setContatos([...contatos, { parentesco: '', nome: '', endereco: '', telefone: '', email: '' }])}>
-                      <Plus size={16} /> Adicionar Contato
+                  {canEdit && (
+                    <button className="btn-save-perfil" onClick={saveItinerary} disabled={isSavingItinerary} style={{ marginTop: '20px' }}>
+                      {isSavingItinerary ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Salvar Itinerário
                     </button>
                   )}
                 </div>
-                
-                <div className="contatos-list" style={{ marginTop: '20px' }}>
-                  {contatos.length === 0 && (
-                    <p style={{ opacity: 0.6, textAlign: 'center', padding: '20px' }}>Nenhum contato cadastrado. Adicione até 3 contatos.</p>
-                  )}
-                  {contatos.map((contato, idx) => (
-                    <div key={idx} className="contato-item-premium" style={{ 
-                      padding: '20px', 
-                      background: '#f8fafc', 
-                      borderRadius: '12px', 
-                      marginBottom: '20px',
-                      border: '1px solid #e2e8f0',
-                      position: 'relative'
-                    }}>
-                      <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                        {canEdit && (
-                          <button className="btn-action-lite delete" onClick={() => setContatos(contatos.filter((_, i) => i !== idx))}>
-                            <Trash2 size={18} />
-                          </button>
+
+                <div className="section-card">
+                  <h3 className="section-title"><Activity size={16} /> Próximos Passos</h3>
+                  <textarea
+                    className="steps-textarea"
+                    placeholder="Descreva os próximos passos para este missionário..."
+                    value={missionario.proximos_passos || ''}
+                    onChange={e => setMissionario({ ...missionario, proximos_passos: e.target.value })}
+                    disabled={!canEdit}
+                    rows={5}
+                  />
+                  {canEdit && <button className="btn-save-perfil" onClick={saveProximosSteps} style={{ marginTop: '10px' }}>{t('common.save')}</button>}
+                </div>
+              </div>
+            )}
+
+            {/* --- CARREIRA & MISSÃO --- */}
+            {activeTab === 'carreira' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><GraduationCap size={16} /> 5. Formação Acadêmica</h3>
+                    {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('formacao')}><Plus size={14} /> Adicionar</button>}
+                  </div>
+                  <div className="generic-list">
+                    {formacaoAcademica.map(f => (
+                      <div key={f.id} className="list-item-card-premium">
+                        <div className="item-icon-container icon-formacao">
+                          <GraduationCap size={20} />
+                        </div>
+                        <div className="item-main-content">
+                          <strong>{f.curso}</strong>
+                          <div className="item-subtitle">{f.faculdade} • {f.periodo}</div>
+                        </div>
+                        <div className="item-actions-premium">
+                          {f.doc_path && <a href={getFileUrl(f.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Baixar Diploma"><Download size={14} /></a>}
+                          {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('formacao-academica', f.id)} title="Excluir"><Trash2 size={14} /></button>}
+                        </div>
+                      </div>
+                    ))}
+                    {formacaoAcademica.length === 0 && <p className="empty-msg">Nenhuma formação acadêmica registrada.</p>}
+                  </div>
+                </div>
+
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><MapPin size={16} /> 6. Atividade Missionária</h3>
+                    {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('atividade')}><Plus size={14} /> Adicionar</button>}
+                  </div>
+                  <div className="generic-list">
+                    {atividadesMissionarias.map(a => (
+                      <div key={a.id} className="list-item-card-premium">
+                        <div className="item-icon-container icon-missao">
+                          <MapPin size={20} />
+                        </div>
+                        <div className="item-main-content">
+                          <strong>{a.lugar}</strong>
+                          <div className="item-subtitle">{a.periodo}</div>
+                          {a.missao && <div className="item-description">{a.missao}</div>}
+                        </div>
+                        <div className="item-actions-premium">
+                          {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('atividade-missionaria', a.id)} title="Excluir"><Trash2 size={14} /></button>}
+                        </div>
+                      </div>
+                    ))}
+                    {atividadesMissionarias.length === 0 && <p className="empty-msg">Nenhuma atividade missionária registrada.</p>}
+                  </div>
+                </div>
+
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><Star size={16} /> 11. Obras Realizadas</h3>
+                    {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('obras')}><Plus size={14} /> Adicionar</button>}
+                  </div>
+                  <div className="generic-list">
+                    {obrasRealizadas.map(o => (
+                      <div key={o.id} className="list-item-card-premium">
+                        <div className="item-icon-container icon-obra">
+                          <Star size={20} />
+                        </div>
+                        <div className="item-main-content">
+                          <strong>{o.lugar}</strong>
+                          <div className="item-subtitle">{o.periodo}</div>
+                          {o.obra && <div className="item-description">{o.obra}</div>}
+                        </div>
+                        <div className="item-actions-premium">
+                          {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('obras-realizadas', o.id)} title="Excluir"><Trash2 size={14} /></button>}
+                        </div>
+                      </div>
+                    ))}
+                    {obrasRealizadas.length === 0 && <p className="empty-msg">Nenhuma obra registrada.</p>}
+                  </div>
+                </div>
+
+                {/* --- 13. QUADRO DE PESSOAL CV --- */}
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><ShieldCheck size={16} /> 13. Quadro de Pessoal CV</h3>
+                    {canEdit && (
+                      <button className="btn-action-lite-text" onClick={() => {
+                        setTempForm({
+                          funcao_atual: quadroPessoal?.funcao_atual || '',
+                          competencias: quadroPessoal?.competencias || '',
+                          cv_path: quadroPessoal?.cv_path || ''
+                        });
+                        setShowAddForm('quadro');
+                      }}>
+                        <Plus size={14} /> {quadroPessoal ? 'Editar' : 'Adicionar'}
+                      </button>
+                    )}
+                  </div>
+                  {quadroPessoal ? (
+                    <div className="list-item-card-premium">
+                      <div className="item-icon-container" style={{ background: '#eff6ff', color: '#1d4ed8', padding: '10px', borderRadius: '10px' }}>
+                        <Users size={20} />
+                      </div>
+                      <div className="item-main-content">
+                        <strong>Função Atual: {quadroPessoal.funcao_atual}</strong>
+                        <div className="item-description" style={{ marginTop: '10px' }}>
+                          <strong>Competências/Resumo:</strong>
+                          <p>{quadroPessoal.competencias}</p>
+                        </div>
+                      </div>
+                      <div className="item-actions-premium">
+                        {quadroPessoal.cv_path && (
+                          <a href={getFileUrl(quadroPessoal.cv_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Ver CV">
+                            <Eye size={14} />
+                          </a>
                         )}
                       </div>
-                      <div className="form-grid-3">
-                        <div className="form-group">
-                          <label>Nome Pai</label>
-                          <input 
-                            type="text" 
-                            placeholder="Nome do pai..." 
-                            value={contato.parentesco} 
-                            onChange={e => {
-                              const newC = [...contatos];
-                              newC[idx].parentesco = e.target.value;
-                              setContatos(newC);
-                            }}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Nome Mãe</label>
-                          <input 
-                            type="text" 
-                            placeholder="Nome da mãe..." 
-                            value={contato.nome} 
-                            onChange={e => {
-                              const newC = [...contatos];
-                              newC[idx].nome = e.target.value;
-                              setContatos(newC);
-                            }}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Telefone</label>
-                          <input 
-                            type="text" 
-                            placeholder="(00) 00000-0000" 
-                            value={contato.telefone} 
-                            onChange={e => {
-                              const newC = [...contatos];
-                              newC[idx].telefone = e.target.value;
-                              setContatos(newC);
-                            }}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                        <div className="form-group full">
-                          <label>Endereço</label>
-                          <input 
-                            type="text" 
-                            placeholder="Endereço completo..." 
-                            value={contato.endereco} 
-                            onChange={e => {
-                              const newC = [...contatos];
-                              newC[idx].endereco = e.target.value;
-                              setContatos(newC);
-                            }}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>E-mail</label>
-                          <input 
-                            type="email" 
-                            placeholder="email@exemplo.com" 
-                            value={contato.email} 
-                            onChange={e => {
-                              const newC = [...contatos];
-                              newC[idx].email = e.target.value;
-                              setContatos(newC);
-                            }}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                      </div>
                     </div>
-                  ))}
-                </div>
-
-                {canEdit && (
-                  <div className="section-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-save-perfil" onClick={saveEndereco} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      Salvar Contatos
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* --- ACESSO AO SISTEMA --- */}
-          {activeTab === 'acesso' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <h3 className="section-title"><ShieldCheck size={16} /> Acesso ao Sistema</h3>
-                <div className="form-grid-2">
-                  <div className="form-group">
-                    <label>E-mail de Login</label>
-                    <input 
-                      type="email" 
-                      value={missionario.login} 
-                      onChange={e => setMissionario({ ...missionario, login: e.target.value })} 
-                      disabled={!canEdit} 
-                      placeholder="email@exemplo.com"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Nova Senha (deixe em branco para não alterar)</label>
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <input 
-                        type={showPassword ? 'text' : 'password'} 
-                        value={newPassword} 
-                        onChange={e => setNewPassword(e.target.value)} 
-                        disabled={!canEdit} 
-                        placeholder="••••••••"
-                        style={{ width: '100%' }}
-                      />
-                      <button 
-                        type="button" 
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}
-                      >
-                        {showPassword ? <Eye size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                {canEdit && (
-                  <div className="section-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-save-perfil" onClick={saveBasicInfo} disabled={isSaving}>
-                      {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      Atualizar Acesso
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* --- RELIGIOSOS & ITINERÁRIO --- */}
-          {activeTab === 'religiosos' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <h3 className="section-title"><BookOpen size={16} /> {t('profile.sections.religious')}</h3>
-                <div className="form-grid-3">
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.first_vows')}</label><input type="date" value={religiososData.primeiros_votos_data} onChange={e => setReligiososData({ ...religiososData, primeiros_votos_data: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.perpetual_vows')}</label><input type="date" value={religiososData.votos_perpetuos_data} onChange={e => setReligiososData({ ...religiososData, votos_perpetuos_data: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.profession_place')}</label><input type="text" value={religiososData.lugar_profissao} onChange={e => setReligiososData({ ...religiososData, lugar_profissao: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.diaconate')}</label><input type="date" value={religiososData.diaconato_data} onChange={e => setReligiososData({ ...religiososData, diaconato_data: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.presbiterato')}</label><input type="date" value={religiososData.presbiterato_data} onChange={e => setReligiososData({ ...religiososData, presbiterato_data: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group"><label>{t('missionaries.wizard.religious.ordaining_bishop')}</label><input type="text" value={religiososData.bispo_ordenante} onChange={e => setReligiososData({ ...religiososData, bispo_ordenante: e.target.value })} disabled={!canEdit} /></div>
-                  <div className="form-group">
-                    <label>{t('missionaries.wizard.civil.situation')}</label>
-                    <select value={missionario.situacao} onChange={e => setMissionario({ ...missionario, situacao: e.target.value })} disabled={!canEdit}>
-                      <option value="ATIVO">Ativo</option>
-                      <option value="FALECIDO">Falecido</option>
-                      <option value="EGRESSO">Egresso</option>
-                      <option value="EXCLAUSTRADO">Exclaustrado</option>
-                    </select>
-                  </div>
-
-                  {/* Conditional Situation Fields */}
-                  {missionario.situacao === 'FALECIDO' && (
-                    <div className="situacao-details-box full">
-                      <h4 className="wizard-divider-lite">Dados de Falecimento</h4>
-                      <div className="form-grid-3">
-                        <div className="form-group"><label>Data do Óbito</label><input type="date" value={situacaoData.data_falecimento} onChange={e => setSituacaoData({ ...situacaoData, data_falecimento: e.target.value })} disabled={!canEdit} /></div>
-                        <div className="form-group"><label>Cidade</label><input type="text" value={situacaoData.cidade_falecimento} onChange={e => setSituacaoData({ ...situacaoData, cidade_falecimento: e.target.value })} disabled={!canEdit} /></div>
-                        <div className="form-group"><label>Local de Sepultamento</label><input type="text" value={situacaoData.local_sepultamento} onChange={e => setSituacaoData({ ...situacaoData, local_sepultamento: e.target.value })} disabled={!canEdit} /></div>
-                        <div className="form-group full">
-                          <label>Certidão de Óbito (PDF ou JPEG)</label>
-                          <div className="file-input-wrapper">
-                            <input type="file" onChange={e => uploadSituacaoDoc(e, 'certidao_obito_path')} disabled={!canEdit} />
-                            {situacaoData.certidao_obito_path && <a href={getFileUrl(situacaoData.certidao_obito_path) || '#'} target="_blank" rel="noreferrer" className="view-link"><Eye size={14} /> Ver Documento</a>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {missionario.situacao === 'EGRESSO' && (
-                    <div className="situacao-details-box full">
-                      <h4 className="wizard-divider-lite">Dados de Egresso</h4>
-                      <div className="form-grid-2">
-                        <div className="form-group">
-                          <label>Incardinados (doc)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_incardinado_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_incardinado_path && <a href={getFileUrl(situacaoData.egresso_incardinado_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                        <div className="form-group">
-                          <label>Desistência ou em outro instituto (doc)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_desistencia_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_desistencia_path && <a href={getFileUrl(situacaoData.egresso_desistencia_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                        <div className="form-group">
-                          <label>Laicizados (doc)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_laicizado_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_laicizado_path && <a href={getFileUrl(situacaoData.egresso_laicizado_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                        <div className="form-group">
-                          <label>Sacerdotes Transferidos - Para a Região (doc)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_transf_para_regiao_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_transf_para_regiao_path && <a href={getFileUrl(situacaoData.egresso_transf_para_regiao_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                        <div className="form-group">
-                          <label>Sacerdotes Transferidos - Da Região para outras Províncias (doc)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'egresso_transf_da_regiao_path')} disabled={!canEdit} />
-                          {situacaoData.egresso_transf_da_regiao_path && <a href={getFileUrl(situacaoData.egresso_transf_da_regiao_path) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {missionario.situacao === 'EXCLAUSTRADO' && (
-                    <div className="situacao-details-box full">
-                      <h4 className="wizard-divider-lite">Dados de Exclaustração</h4>
-                      <div className="form-grid-2">
-                        <div className="form-group"><label>Data</label><input type="date" value={situacaoData.exclaustrado_data} onChange={e => setSituacaoData({ ...situacaoData, exclaustrado_data: e.target.value })} disabled={!canEdit} /></div>
-                        <div className="form-group">
-                          <label>Processo (PDF)</label>
-                          <input type="file" onChange={e => uploadSituacaoDoc(e, 'exclaustrado_processo')} disabled={!canEdit} />
-                          {situacaoData.exclaustrado_processo && <a href={getFileUrl(situacaoData.exclaustrado_processo) || '#'} target="_blank" rel="noreferrer" className="view-link">Ver</a>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="form-group">
-                    <label className="checkbox-label" style={{ marginTop: '20px' }}>
-                      <input type="checkbox" checked={missionario.is_oconomo} onChange={e => setMissionario({ ...missionario, is_oconomo: e.target.checked })} disabled={!canEdit} />
-                      {t('missionaries.wizard.religious.is_oconomo')}
-                    </label>
-                  </div>
-                  <div className="form-group">
-                    <label className="checkbox-label" style={{ marginTop: '20px' }}>
-                      <input type="checkbox" checked={missionario.is_superior} onChange={e => setMissionario({ ...missionario, is_superior: e.target.checked })} disabled={!canEdit} />
-                      {t('missionaries.wizard.religious.is_superior')}
-                    </label>
-                  </div>
-                </div>
-                {canEdit && (
-                  <div className="section-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-save-perfil" onClick={saveReligiosos} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      {t('profile.actions.save_religious')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* --- 4. ITINERÁRIO FORMATIVO --- */}
-          {activeTab === 'itinerario' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <h3 className="section-title"><Activity size={16} /> 4. Itinerário Formativo</h3>
-                <div className="itinerary-full-grid">
-                  <div className="wizard-divider-lite" style={{ gridColumn: '1 / -1' }}>4.1 Formação Inicial</div>
-                  {[
-                    { label: '4.1.1 Seminário Menor', etapa: '4.1.1' },
-                    { label: '4.1.2 Propedêutico', etapa: '4.1.2' },
-                    { label: '4.1.3 Filosofia', etapa: '4.1.3' },
-                    { label: '4.1.4 Postulado', etapa: '4.1.4' },
-                    { label: '4.1.5 Noviciado', etapa: '4.1.5' },
-                    { label: '4.1.6 Teologia', etapa: '4.1.6' },
-                    { label: '4.1.7 Tirocínio', etapa: '4.1.7' },
-                  ].map((seg) => {
-                    const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
-                    return (
-                      <div key={seg.etapa} className="itinerary-row-card">
-                        <div className="itin-label">{seg.label}</div>
-                        <div className="itin-inputs">
-                          <input type="text" placeholder="Local" value={stage.local} onChange={e => {
-                            const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, local: e.target.value }];
-                            setItinerarioStages(ns);
-                          }} disabled={!canEdit} />
-                          <input type="text" placeholder="Período" value={stage.periodo} onChange={e => {
-                            const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, periodo: e.target.value }];
-                            setItinerarioStages(ns);
-                          }} disabled={!canEdit} />
-                          <div className="itin-doc-actions">
-                            {stage.doc_path ? (
-                              <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
-                            ) : (
-                              <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
-                                <Plus size={14} /> Anexar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="wizard-divider-lite" style={{ gridColumn: '1 / -1', marginTop: '20px' }}>4.2 Vida Religiosa & 4.3 Ministérios</div>
-                  {[
-                    { label: '4.2.1 Primeira Profissão', etapa: '4.2.1' },
-                    { label: '4.2.2 Renovação Votos', etapa: '4.2.2' },
-                    { label: '4.2.3 Profissão Perpétua', etapa: '4.2.3' },
-                    { label: '4.3.1 Leitorado', etapa: '4.3.1' },
-                    { label: '4.3.2 Acolitado', etapa: '4.3.2' },
-                    { label: '4.3.3 Diaconato', etapa: '4.3.3' },
-                    { label: '4.3.4 Presbiterato', etapa: '4.3.4' },
-                    { label: '4.4 Destinação', etapa: '4.4' },
-                  ].map((seg) => {
-                    const stage = itinerarioStages.find(s => s.etapa === seg.etapa) || { etapa: seg.etapa, local: '', periodo: '', doc_path: '', is_sub_etapa: false };
-                    return (
-                      <div key={seg.etapa} className="itinerary-row-card simple">
-                        <div className="itin-label">{seg.label}</div>
-                        <div className="itin-inputs">
-                          <input type="text" placeholder="Observação/Lugar" value={stage.local} onChange={e => {
-                            const ns = [...itinerarioStages.filter(s => s.etapa !== seg.etapa), { ...stage, local: e.target.value }];
-                            setItinerarioStages(ns);
-                          }} disabled={!canEdit} />
-                          <div className="itin-doc-actions">
-                            {stage.doc_path ? (
-                              <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver</a>
-                            ) : (
-                              <button className="btn-itin-doc" onClick={() => { activeEtapaRef.current = seg.etapa; itinFileInputRef.current?.click(); }} disabled={!canEdit}>
-                                <Plus size={14} /> Doc
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {canEdit && (
-                  <button className="btn-save-perfil" onClick={saveItinerary} disabled={isSavingItinerary} style={{ marginTop: '20px' }}>
-                    {isSavingItinerary ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Salvar Itinerário
-                  </button>
-                )}
-              </div>
-
-              <div className="section-card">
-                <h3 className="section-title"><Activity size={16} /> Próximos Passos</h3>
-                <textarea
-                  className="steps-textarea"
-                  placeholder="Descreva os próximos passos para este missionário..."
-                  value={missionario.proximos_passos || ''}
-                  onChange={e => setMissionario({ ...missionario, proximos_passos: e.target.value })}
-                  disabled={!canEdit}
-                  rows={5}
-                />
-                {canEdit && <button className="btn-save-perfil" onClick={saveProximosSteps} style={{ marginTop: '10px' }}>{t('common.save')}</button>}
-              </div>
-            </div>
-          )}
-
-          {/* --- CARREIRA & MISSÃO --- */}
-          {activeTab === 'carreira' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><GraduationCap size={16} /> 5. Formação Acadêmica</h3>
-                  {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('formacao')}><Plus size={14} /> Adicionar</button>}
-                </div>
-                <div className="generic-list">
-                  {formacaoAcademica.map(f => (
-                    <div key={f.id} className="list-item-card-premium">
-                      <div className="item-icon-container icon-formacao">
-                        <GraduationCap size={20} />
-                      </div>
-                      <div className="item-main-content">
-                        <strong>{f.curso}</strong>
-                        <div className="item-subtitle">{f.faculdade} • {f.periodo}</div>
-                      </div>
-                      <div className="item-actions-premium">
-                        {f.doc_path && <a href={getFileUrl(f.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Baixar Diploma"><Download size={14} /></a>}
-                        {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('formacao-academica', f.id)} title="Excluir"><Trash2 size={14} /></button>}
-                      </div>
-                    </div>
-                  ))}
-                  {formacaoAcademica.length === 0 && <p className="empty-msg">Nenhuma formação acadêmica registrada.</p>}
-                </div>
-              </div>
-
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><MapPin size={16} /> 6. Atividade Missionária</h3>
-                  {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('atividade')}><Plus size={14} /> Adicionar</button>}
-                </div>
-                <div className="generic-list">
-                  {atividadesMissionarias.map(a => (
-                    <div key={a.id} className="list-item-card-premium">
-                      <div className="item-icon-container icon-missao">
-                        <MapPin size={20} />
-                      </div>
-                      <div className="item-main-content">
-                        <strong>{a.lugar}</strong>
-                        <div className="item-subtitle">{a.periodo}</div>
-                        {a.missao && <div className="item-description">{a.missao}</div>}
-                      </div>
-                      <div className="item-actions-premium">
-                        {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('atividade-missionaria', a.id)} title="Excluir"><Trash2 size={14} /></button>}
-                      </div>
-                    </div>
-                  ))}
-                  {atividadesMissionarias.length === 0 && <p className="empty-msg">Nenhuma atividade missionária registrada.</p>}
-                </div>
-              </div>
-
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><Star size={16} /> 11. Obras Realizadas</h3>
-                  {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('obras')}><Plus size={14} /> Adicionar</button>}
-                </div>
-                <div className="generic-list">
-                  {obrasRealizadas.map(o => (
-                    <div key={o.id} className="list-item-card-premium">
-                      <div className="item-icon-container icon-obra">
-                        <Star size={20} />
-                      </div>
-                      <div className="item-main-content">
-                        <strong>{o.lugar}</strong>
-                        <div className="item-subtitle">{o.periodo}</div>
-                        {o.obra && <div className="item-description">{o.obra}</div>}
-                      </div>
-                      <div className="item-actions-premium">
-                        {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('obras-realizadas', o.id)} title="Excluir"><Trash2 size={14} /></button>}
-                      </div>
-                    </div>
-                  ))}
-                  {obrasRealizadas.length === 0 && <p className="empty-msg">Nenhuma obra registrada.</p>}
-                </div>
-              </div>
-
-              {/* --- 13. QUADRO DE PESSOAL CV --- */}
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><ShieldCheck size={16} /> 13. Quadro de Pessoal CV</h3>
-                  {canEdit && (
-                    <button className="btn-action-lite-text" onClick={() => {
-                      setTempForm({
-                        funcao_atual: quadroPessoal?.funcao_atual || '',
-                        competencias: quadroPessoal?.competencias || '',
-                        cv_path: quadroPessoal?.cv_path || ''
-                      });
-                      setShowAddForm('quadro');
-                    }}>
-                      <Plus size={14} /> {quadroPessoal ? 'Editar' : 'Adicionar'}
-                    </button>
+                  ) : (
+                    <p className="empty-msg">Nenhuma informação de quadro de pessoal registrada.</p>
                   )}
                 </div>
-                {quadroPessoal ? (
-                  <div className="list-item-card-premium">
-                    <div className="item-icon-container" style={{ background: '#eff6ff', color: '#1d4ed8', padding: '10px', borderRadius: '10px' }}>
-                      <Users size={20} />
-                    </div>
-                    <div className="item-main-content">
-                      <strong>Função Atual: {quadroPessoal.funcao_atual}</strong>
-                      <div className="item-description" style={{ marginTop: '10px' }}>
-                        <strong>Competências/Resumo:</strong>
-                        <p>{quadroPessoal.competencias}</p>
-                      </div>
-                    </div>
-                    <div className="item-actions-premium">
-                      {quadroPessoal.cv_path && (
-                        <a href={getFileUrl(quadroPessoal.cv_path) || '#'} target="_blank" rel="noreferrer" className="btn-action-lite" title="Ver CV">
-                          <Eye size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="empty-msg">Nenhuma informação de quadro de pessoal registrada.</p>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* --- SAÚDE & FINANCEIRO --- */}
-          {activeTab === 'saude' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><Activity size={16} /> 7. Saúde</h3>
-                  {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('saude')}><Plus size={14} /> Adicionar Registro</button>}
-                </div>
-                <div className="generic-list">
-                  {saudeRecords.map(s => (
-                    <div key={s.id} className="list-item-card-premium">
-                      <div className="item-icon-container icon-saude">
-                        <Activity size={20} />
-                      </div>
-                      <div className="item-main-content">
-                        <strong>{s.seguradora || 'Seguradora não informada'}</strong>
-                        <div className="item-subtitle">CNS: {s.sus_card || 'N/A'} • Carteira: {s.numero_carteira || 'N/A'}</div>
-                      </div>
-                      <div className="item-actions-premium">
-                        {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('saude', s.id)} title="Excluir"><Trash2 size={14} /></button>}
-                      </div>
-                    </div>
-                  ))}
-                  {saudeRecords.length === 0 && <p className="empty-msg">Nenhum registro de saúde cadastrado.</p>}
-                </div>
-              </div>
-
-              <div className="section-card">
-                <h3 className="section-title"><ShieldCheck size={16} /> 8. Previdenciário / IR</h3>
-                <div className="form-group" style={{ maxWidth: '400px' }}>
-                  <label>NIT (Número de Identificação do Trabalhador)</label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <input type="text" value={nit} onChange={e => setNit(e.target.value)} disabled={!canEdit} placeholder="Digite o NIT..." />
-                    {canEdit && <button className="btn-save-perfil" onClick={saveCivil} style={{ padding: '0 15px' }} title="Salvar NIT"><Save size={16} /></button>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><DollarSign size={16} /> 9. Contas Bancárias</h3>
-                  {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('banco')}><Plus size={14} /> Adicionar</button>}
-                </div>
-                <div className="generic-list">
-                  {contasBancarias.map(b => (
-                    <div key={b.id} className="list-item-card-premium">
-                      <div className="item-icon-container icon-banco">
-                        <DollarSign size={20} />
-                      </div>
-                      <div className="item-main-content">
-                        <strong>{b.tipo_conta} • {b.titularidade}</strong>
-                        <div className="item-subtitle">Ag: {b.agencia} • Conta: {b.numero}</div>
-                      </div>
-                      <div className="item-actions-premium">
-                        {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('contas-bancarias', b.id)} title="Excluir"><Trash2 size={14} /></button>}
-                      </div>
-                    </div>
-                  ))}
-                  {contasBancarias.length === 0 && <p className="empty-msg">Nenhuma conta bancária registrada.</p>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* --- CASAS --- */}
-          {activeTab === 'casas' && (
-            <div className="tab-panel">
-              {canEdit && (
+            {/* --- SAÚDE & FINANCEIRO --- */}
+            {activeTab === 'saude' && (
+              <div className="tab-panel">
                 <div className="section-card">
-                  <h3 className="section-title"><Plus size={16} /> Presença Missionária</h3>
-                  <div className="form-grid-3">
-                    <div className="form-group">
-                      <label>{t('missionaries.wizard.houses.select_house')}</label>
-                      <select value={novaVinculacao.casa_id} onChange={e => setNovaVinculacao(p => ({ ...p, casa_id: e.target.value }))}>
-                        <option value="">Selecione...</option>
-                        {casasDisponiveis.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                      </select>
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><Activity size={16} /> 7. Saúde</h3>
+                    {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('saude')}><Plus size={14} /> Adicionar Registro</button>}
+                  </div>
+                  <div className="generic-list">
+                    {saudeRecords.map(s => (
+                      <div key={s.id} className="list-item-card-premium">
+                        <div className="item-icon-container icon-saude">
+                          <Activity size={20} />
+                        </div>
+                        <div className="item-main-content">
+                          <strong>{s.seguradora || 'Seguradora não informada'}</strong>
+                          <div className="item-subtitle">CNS: {s.sus_card || 'N/A'} • Carteira: {s.numero_carteira || 'N/A'}</div>
+                        </div>
+                        <div className="item-actions-premium">
+                          {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('saude', s.id)} title="Excluir"><Trash2 size={14} /></button>}
+                        </div>
+                      </div>
+                    ))}
+                    {saudeRecords.length === 0 && <p className="empty-msg">Nenhum registro de saúde cadastrado.</p>}
+                  </div>
+                </div>
+
+                <div className="section-card">
+                  <h3 className="section-title"><ShieldCheck size={16} /> 8. Previdenciário / IR</h3>
+                  <div className="form-group" style={{ maxWidth: '400px' }}>
+                    <label>NIT (Número de Identificação do Trabalhador)</label>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input type="text" value={nit} onChange={e => setNit(e.target.value)} disabled={!canEdit} placeholder="Digite o NIT..." />
+                      {canEdit && <button className="btn-save-perfil" onClick={saveCivil} style={{ padding: '0 15px' }} title="Salvar NIT"><Save size={16} /></button>}
                     </div>
-                    <div className="form-group"><label>{t('missionaries.wizard.houses.start_date')}</label><input type="date" value={novaVinculacao.data_inicio} onChange={e => setNovaVinculacao(p => ({ ...p, data_inicio: e.target.value }))} /></div>
-                    <div className="form-group"><label>Data de Saída (opcional)</label><input type="date" value={novaVinculacao.data_fim} onChange={e => setNovaVinculacao(p => ({ ...p, data_fim: e.target.value }))} /></div>
-                    <div className="form-group">
-                      <label className="checkbox-label" style={{ marginTop: '20px' }}>
-                        <input type="checkbox" checked={novaVinculacao.is_superior} onChange={e => setNovaVinculacao(p => ({ ...p, is_superior: e.target.checked }))} />
-                        {t('missionaries.wizard.houses.is_superior')}
-                      </label>
-                    </div>
+                  </div>
+                </div>
+
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><DollarSign size={16} /> 9. Contas Bancárias</h3>
+                    {canEdit && <button className="btn-action-lite-text" onClick={() => setShowAddForm('banco')}><Plus size={14} /> Adicionar</button>}
+                  </div>
+                  <div className="generic-list">
+                    {contasBancarias.map(b => (
+                      <div key={b.id} className="list-item-card-premium">
+                        <div className="item-icon-container icon-banco">
+                          <DollarSign size={20} />
+                        </div>
+                        <div className="item-main-content">
+                          <strong>{b.tipo_conta} • {b.titularidade}</strong>
+                          <div className="item-subtitle">Ag: {b.agencia} • Conta: {b.numero}</div>
+                        </div>
+                        <div className="item-actions-premium">
+                          {canEdit && <button className="btn-action-lite delete" onClick={() => handleGenericDelete('contas-bancarias', b.id)} title="Excluir"><Trash2 size={14} /></button>}
+                        </div>
+                      </div>
+                    ))}
+                    {contasBancarias.length === 0 && <p className="empty-msg">Nenhuma conta bancária registrada.</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- CASAS --- */}
+            {activeTab === 'casas' && (
+              <div className="tab-panel">
+                {canEdit && (
+                  <div className="section-card">
+                    <h3 className="section-title"><Plus size={16} /> Presença Missionária</h3>
+                    <div className="form-grid-3">
+                      <div className="form-group">
+                        <label>{t('missionaries.wizard.houses.select_house')}</label>
+                        <select value={novaVinculacao.casa_id} onChange={e => setNovaVinculacao(p => ({ ...p, casa_id: e.target.value }))}>
+                          <option value="">Selecione...</option>
+                          {casasDisponiveis.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Tipo</label>
+                        <select value={(novaVinculacao as any).tipo || ''} onChange={e => setNovaVinculacao(p => ({ ...p, tipo: e.target.value }))}>
+                          <option value="">Selecione...</option>
+                          <option value="CI">Casas de Idosos – CI</option>
+                          <option value="CR">Casas Religiosas – CR</option>
+                          <option value="M">Obras – M</option>
+                          <option value="P">Paróquia – P</option>
+                          <option value="PV">Pastoral Vocacional - PV</option>
+                          <option value="CS">Seminário - CS</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>PM</label>
+                        <input type="text" value={(novaVinculacao as any).pm || ''} onChange={e => setNovaVinculacao(p => ({ ...p, pm: e.target.value }))} placeholder="Ex: CR 13" />
+                      </div>
+                      <div className="form-group">
+                        <label>País</label>
+                        <input type="text" list="paises-list" value={(novaVinculacao as any).pais || 'Brasil'} onChange={e => setNovaVinculacao(p => ({ ...p, pais: e.target.value }))} placeholder="Selecione ou digite..." />
+                        <datalist id="paises-list">
+                          {PAISES_COMMON.map(p => <option key={p} value={p} />)}
+                        </datalist>
+                      </div>
+                      <div className="form-group"><label>{t('missionaries.wizard.houses.start_date')}</label><input type="date" value={novaVinculacao.data_inicio} onChange={e => setNovaVinculacao(p => ({ ...p, data_inicio: e.target.value }))} /></div>
+                      <div className="form-group"><label>Data de Saída (opcional)</label><input type="date" value={novaVinculacao.data_fim} onChange={e => setNovaVinculacao(p => ({ ...p, data_fim: e.target.value }))} /></div>
+                      <div className="form-group" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        {[
+                          { key: 'Superior Local', label: 'Superior Local', isSuperior: true },
+                          { key: 'Pároco', label: 'Pároco' },
+                          { key: 'Diretor', label: 'Diretor (rádios, escolas, fundações, escritórios)' },
+                          { key: 'Ecônomo Local', label: 'Ecônomo Local' },
+                          { key: 'Vigário', label: 'Vigário' },
+                          { key: 'Reitor', label: 'Reitor (seminários)' },
+                        ].map(r => (
+                            <label key={r.key} className="checkbox-label" style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={Array.isArray(novaVinculacao.funcao) && novaVinculacao.funcao.includes(r.key)}
+                                onChange={e => setNovaVinculacao(p => {
+                                  const current = Array.isArray(p.funcao) ? [...p.funcao] : [];
+                                  if (e.target.checked) {
+                                    if (!current.includes(r.key)) current.push(r.key);
+                                  } else {
+                                    const idx = current.indexOf(r.key);
+                                    if (idx >= 0) current.splice(idx, 1);
+                                  }
+                                  return { ...p, funcao: current, is_superior: current.includes('Superior Local') };
+                                })}
+                              />
+                              {r.label}
+                            </label>
+                        ))}
+                      </div>
                   </div>
                   <button className="btn-save-perfil" onClick={addCasa}><Plus size={16} /> {t('profile.actions.bind_btn')}</button>
                 </div>
-              )}
-              <div className="section-card">
-                <h3 className="section-title"><HomeIcon size={16} /> Histórico de Presença</h3>
-                <div className="casas-list">
-                  {casasHistorico.map(c => (
-                    <div key={c.id} className={`casa-item ${!c.data_fim ? 'casa-ativa' : ''}`}>
-                      <div className="casa-info">
-                        <span className="casa-nome">{c.casa_nome}</span>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
-                          {c.is_superior && <span className="superior-badge"><Star size={11} /> Superior</span>}
-                          <span className="duracao-pill" style={{ background: '#f0f4f8', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>⏱ {calcDuracao(c.data_inicio, c.data_fim)}</span>
-                        </div>
-                        <span className="casa-periodo" style={{ marginTop: '4px', display: 'block', fontSize: '12px', color: '#666' }}>
-                          {c.data_inicio ? new Date(c.data_inicio).toLocaleDateString('pt-BR') : '?'} → {c.data_fim ? new Date(c.data_fim).toLocaleDateString('pt-BR') : 'Atual'}
-                        </span>
-                      </div>
-                      {canEdit && <button className="btn-action-lite delete" onClick={() => removeCasa(c.id)}><Trash2 size={16} /></button>}
-                    </div>
-                  ))}
-                  {casasHistorico.length === 0 && <p className="empty-msg">Nenhuma casa vinculada.</p>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* --- OBSERVATIONS --- */}
-          {activeTab === 'obs' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <div className="section-header-flex">
-                  <h3 className="section-title"><FileText size={16} /> 12. Observações Gerais</h3>
-                  {canEdit && <button className="btn-save-perfil" onClick={() => setShowAddForm('obs')}><Plus size={16} /> Nova Obs</button>}
-                </div>
-                <div className="obs-list" style={{ marginTop: '20px' }}>
-                  {observacoesGerais.map(o => (
-                    <div key={o.id} className="obs-entry-card">
-                      <div className="obs-date">{new Date(o.created_at).toLocaleString()}</div>
-                      <div className="obs-text">{o.texto}</div>
-                      {canEdit && (
-                        <div className="obs-actions">
-                          <button className="btn-action-lite delete" onClick={() => handleGenericDelete('observacoes-gerais', o.id)}><Trash2 size={14} /></button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* --- PERMISSÕES --- */}
-          {activeTab === 'permissoes' && (
-            <div className="tab-panel">
-              <div className="section-card">
-                <h3 className="section-title"><ShieldCheck size={16} /> Permissões de Visualização</h3>
-                <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '20px' }}>
-                   Abaixo estão as seções do cadastro que este missionário tem permissão para visualizar no seu próprio perfil.
-                </p>
-                
-                <div style={{ background: '#f8fafc', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                    {PERMISSIONS_LIST.map(perm => {
-                      const isGranted = !!missionario.permissoes?.[perm.id];
-                      return (
-                        <div key={perm.id} style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '12px', 
-                          padding: '12px', 
-                          background: 'white', 
-                          borderRadius: '8px',
-                          border: `1px solid ${isGranted ? '#10b981' : '#e2e8f0'}`,
-                          opacity: isGranted ? 1 : 0.6
-                        }}>
-                          {isGranted ? (
-                            <CheckCircle size={18} style={{ color: '#10b981' }} />
-                          ) : (
-                            <Lock size={18} style={{ color: '#94a3b8' }} />
-                          )}
-                          <span style={{ 
-                            fontSize: '0.85rem', 
-                            fontWeight: isGranted ? 600 : 400,
-                            color: isGranted ? '#0f172a' : '#64748b'
-                          }}>
-                            {perm.label}
+                )}
+                <div className="section-card">
+                  <h3 className="section-title"><HomeIcon size={16} /> Histórico de Presença</h3>
+                  <div className="casas-list">
+                    {casasHistorico.filter(c => Array.isArray(c.funcao) && ['Superior Local','Pároco','Diretor','Ecônomo Local','Vigário','Reitor'].some(r => c.funcao.includes(r))).map(c => (
+                      <div key={c.id} className={`casa-item ${!c.data_fim ? 'casa-ativa' : ''}`}>
+                        <div className="casa-info">
+                          <span className="casa-nome">{c.casa_nome}</span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
+                            {c.is_superior && <span className="superior-badge"><Star size={11} /> Superior</span>}
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: '6px', flexWrap: 'wrap' }}>
+                              {Array.isArray(c.funcao) && c.funcao.length > 0 ? (
+                                c.funcao.map((f, idx) => (
+                                  <span key={idx} className="role-badge" style={{ background: '#eef2ff', color: '#1e3a8a', padding: '4px 8px', borderRadius: '8px', fontSize: '12px' }}>{f}</span>
+                                ))
+                              ) : null}
+                            </div>
+                            <span className="duracao-pill" style={{ background: '#f0f4f8', fontSize: '11px', padding: '2px 6px', borderRadius: '4px' }}>⏱ {calcDuracao(c.data_inicio, c.data_fim)}</span>
+                          </div>
+                          <span className="casa-periodo" style={{ marginTop: '4px', display: 'block', fontSize: '12px', color: '#666' }}>
+                            {formatDateLocal(c.data_inicio)} → {c.data_fim ? formatDateLocal(c.data_fim) : 'Atual'}
                           </span>
                         </div>
-                      );
-                    })}
+                        {canEdit && <button className="btn-action-lite delete" onClick={() => removeCasa(c.id)}><Trash2 size={16} /></button>}
+                      </div>
+                    ))}
+                    {casasHistorico.filter(c => Array.isArray(c.funcao) && ['Superior Local','Pároco','Diretor','Ecônomo Local','Vigário','Reitor'].some(r => c.funcao.includes(r))).length === 0 && <p className="empty-msg">Nenhuma casa vinculada.</p>}
                   </div>
                 </div>
-                
-                {(isAdminGeral || canEdit) && (
-                   <div style={{ marginTop: '20px', padding: '15px', background: '#eff6ff', borderRadius: '8px', color: '#1e40af', fontSize: '0.85rem' }}>
-                      <strong>Nota de Administrador:</strong> Você pode alterar estas permissões na tela de <a href="/administradores" style={{ color: '#013375', fontWeight: 700 }}>Gestão de Acessos</a> ou editando o cadastro do missionário.
-                   </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* --- MODAL --- */}
-          {showAddForm && (
-            <div className="modal-overlay">
-              <div className="modal-content">
-                <h3>Adicionar {showAddForm === 'formacao' ? 'Formação' : showAddForm === 'atividade' ? 'Atividade' : showAddForm === 'obras' ? 'Obra' : showAddForm === 'saude' ? 'Registro de Saúde' : showAddForm === 'banco' ? 'Conta Bancária' : 'Observação'}</h3>
-                <div className="form-grid-1" style={{ gap: '15px' }}>
-                  {showAddForm === 'formacao' && (
-                    <>
-                      <div className="form-group"><label>Curso</label><input type="text" onChange={e => setTempForm({ ...tempForm, curso: e.target.value })} /></div>
-                      <div className="form-group"><label>Instituição</label><input type="text" onChange={e => setTempForm({ ...tempForm, faculdade: e.target.value })} /></div>
-                      <div className="form-group"><label>Período</label><input type="text" placeholder="Ex: 2018-2022" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
-                    </>
-                  )}
-                  {showAddForm === 'atividade' && (
-                    <>
-                      <div className="form-group"><label>Lugar</label><input type="text" onChange={e => setTempForm({ ...tempForm, lugar: e.target.value })} /></div>
-                      <div className="form-group"><label>Período</label><input type="text" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
-                      <div className="form-group"><label>Descrição da Missão</label><textarea rows={3} onChange={e => setTempForm({ ...tempForm, missao: e.target.value })} /></div>
-                    </>
-                  )}
-                  {showAddForm === 'obras' && (
-                    <>
-                      <div className="form-group"><label>Lugar</label><input type="text" onChange={e => setTempForm({ ...tempForm, lugar: e.target.value })} /></div>
-                      <div className="form-group"><label>Período</label><input type="text" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
-                      <div className="form-group"><label>Obra Realizada</label><textarea rows={3} onChange={e => setTempForm({ ...tempForm, obra: e.target.value })} /></div>
-                    </>
-                  )}
-                  {showAddForm === 'saude' && (
-                    <>
-                      <div className="form-group"><label>CNS (Cartão SUS)</label><input type="text" onChange={e => setTempForm({ ...tempForm, sus_card: e.target.value })} /></div>
-                      <div className="form-group"><label>Seguradora</label><input type="text" onChange={e => setTempForm({ ...tempForm, seguradora: e.target.value })} /></div>
-                      <div className="form-group"><label>Nº Carteira</label><input type="text" onChange={e => setTempForm({ ...tempForm, numero_carteira: e.target.value })} /></div>
-                    </>
-                  )}
-                  {showAddForm === 'banco' && (
-                    <>
-                      <div className="form-group"><label>Tipo de Conta</label><input type="text" placeholder="Ex: Corrente, Poupança" onChange={e => setTempForm({ ...tempForm, tipo_conta: e.target.value })} /></div>
-                      <div className="form-group"><label>Titularidade</label><input type="text" onChange={e => setTempForm({ ...tempForm, titularidade: e.target.value })} /></div>
-                      <div className="form-group"><label>Agência</label><input type="text" onChange={e => setTempForm({ ...tempForm, agencia: e.target.value })} /></div>
-                      <div className="form-group"><label>Número Conta</label><input type="text" onChange={e => setTempForm({ ...tempForm, numero: e.target.value })} /></div>
-                    </>
-                  )}
-                  {showAddForm === 'quadro' && (
-                    <>
-                      <div className="form-group"><label>Função Atual</label><input type="text" value={tempForm.funcao_atual || ''} onChange={e => setTempForm({ ...tempForm, funcao_atual: e.target.value })} /></div>
-                      <div className="form-group"><label>Competências / Resumo</label><textarea rows={4} value={tempForm.competencias || ''} onChange={e => setTempForm({ ...tempForm, competencias: e.target.value })} /></div>
-                      <div className="form-group">
-                        <label>CV / Documento (PDF ou JPEG)</label>
-                        <div className="file-input-wrapper">
-                          <input type="file" onChange={e => uploadGenericDoc(e, 'quadro-pessoal')} />
-                        </div>
+            {/* --- OBSERVATIONS --- */}
+            {activeTab === 'obs' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <div className="section-header-flex">
+                    <h3 className="section-title"><FileText size={16} /> 12. Observações Gerais</h3>
+                    {canEdit && <button className="btn-save-perfil" onClick={() => setShowAddForm('obs')}><Plus size={16} /> Nova Obs</button>}
+                  </div>
+                  <div className="obs-list" style={{ marginTop: '20px' }}>
+                    {observacoesGerais.map(o => (
+                      <div key={o.id} className="obs-entry-card">
+                        <div className="obs-date">{new Date(o.created_at).toLocaleString()}</div>
+                        <div className="obs-text">{o.texto}</div>
+                        {canEdit && (
+                          <div className="obs-actions">
+                            <button className="btn-action-lite delete" onClick={() => handleGenericDelete('observacoes-gerais', o.id)}><Trash2 size={14} /></button>
+                          </div>
+                        )}
                       </div>
-                    </>
-                  )}
-                  {showAddForm === 'obs' && (
-                    <div className="form-group"><label>Texto da Observação</label><textarea rows={6} onChange={e => setTempForm({ ...tempForm, texto: e.target.value })} /></div>
-                  )}
-                </div>
-                <div className="modal-actions" style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                  <button className="btn-back" onClick={() => setShowAddForm(null)}>Cancelar</button>
-                  <button className="btn-save-perfil" onClick={() => {
-                    const endpoint = showAddForm === 'formacao' ? 'formacao-academica' :
-                      showAddForm === 'atividade' ? 'atividade-missionaria' :
-                        showAddForm === 'obras' ? 'obras-realizadas' :
-                          showAddForm === 'saude' ? 'saude' :
-                            showAddForm === 'banco' ? 'contas-bancarias' :
-                              showAddForm === 'obs' ? 'observacoes-gerais' :
-                              showAddForm === 'quadro' ? 'quadro-pessoal' : '';
-                    handleGenericAdd(endpoint, tempForm);
-                  }}>Confirmar</button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+            )}
 
-  export default PerfilMissionario;
+            {/* --- PERMISSÕES --- */}
+            {activeTab === 'permissoes' && (
+              <div className="tab-panel">
+                <div className="section-card">
+                  <h3 className="section-title"><ShieldCheck size={16} /> Permissões de Visualização</h3>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '20px' }}>
+                    Abaixo estão as seções do cadastro que este missionário tem permissão para visualizar no seu próprio perfil.
+                  </p>
+
+                  <div style={{ background: '#f8fafc', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                      {PERMISSIONS_LIST.map(perm => {
+                        const isGranted = !!missionario.permissoes?.[perm.id];
+                        return (
+                          <div key={perm.id} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            border: `1px solid ${isGranted ? '#10b981' : '#e2e8f0'}`,
+                            opacity: isGranted ? 1 : 0.6
+                          }}>
+                            {isGranted ? (
+                              <CheckCircle size={18} style={{ color: '#10b981' }} />
+                            ) : (
+                              <Lock size={18} style={{ color: '#94a3b8' }} />
+                            )}
+                            <span style={{
+                              fontSize: '0.85rem',
+                              fontWeight: isGranted ? 600 : 400,
+                              color: isGranted ? '#0f172a' : '#64748b'
+                            }}>
+                              {perm.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {(isAdminGeral || canEdit) && (
+                    <div style={{ marginTop: '20px', padding: '15px', background: '#eff6ff', borderRadius: '8px', color: '#1e40af', fontSize: '0.85rem' }}>
+                      <strong>Nota de Administrador:</strong> Você pode alterar estas permissões na tela de <a href="/administradores" style={{ color: '#013375', fontWeight: 700 }}>Gestão de Acessos</a> ou editando o cadastro do missionário.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- MODAL --- */}
+            {showAddForm && (
+              <div className="modal-overlay">
+                <div className="modal-content">
+                  <h3>Adicionar {showAddForm === 'formacao' ? 'Formação' : showAddForm === 'atividade' ? 'Atividade' : showAddForm === 'obras' ? 'Obra' : showAddForm === 'saude' ? 'Registro de Saúde' : showAddForm === 'banco' ? 'Conta Bancária' : 'Observação'}</h3>
+                  <div className="form-grid-1" style={{ gap: '15px' }}>
+                    {showAddForm === 'formacao' && (
+                      <>
+                        <div className="form-group"><label>Curso</label><input type="text" onChange={e => setTempForm({ ...tempForm, curso: e.target.value })} /></div>
+                        <div className="form-group"><label>Instituição</label><input type="text" onChange={e => setTempForm({ ...tempForm, faculdade: e.target.value })} /></div>
+                        <div className="form-group"><label>Período</label><input type="text" placeholder="Ex: 2018-2022" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
+                      </>
+                    )}
+                    {showAddForm === 'atividade' && (
+                      <>
+                        <div className="form-group"><label>Lugar</label><input type="text" onChange={e => setTempForm({ ...tempForm, lugar: e.target.value })} /></div>
+                        <div className="form-group"><label>Período</label><input type="text" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
+                        <div className="form-group"><label>Descrição da Missão</label><textarea rows={3} onChange={e => setTempForm({ ...tempForm, missao: e.target.value })} /></div>
+                      </>
+                    )}
+                    {showAddForm === 'obras' && (
+                      <>
+                        <div className="form-group"><label>Lugar</label><input type="text" onChange={e => setTempForm({ ...tempForm, lugar: e.target.value })} /></div>
+                        <div className="form-group"><label>Período</label><input type="text" onChange={e => setTempForm({ ...tempForm, periodo: e.target.value })} /></div>
+                        <div className="form-group"><label>Obra Realizada</label><textarea rows={3} onChange={e => setTempForm({ ...tempForm, obra: e.target.value })} /></div>
+                      </>
+                    )}
+                    {showAddForm === 'saude' && (
+                      <>
+                        <div className="form-group"><label>CNS (Cartão SUS)</label><input type="text" onChange={e => setTempForm({ ...tempForm, sus_card: e.target.value })} /></div>
+                        <div className="form-group"><label>Seguradora</label><input type="text" onChange={e => setTempForm({ ...tempForm, seguradora: e.target.value })} /></div>
+                        <div className="form-group"><label>Nº Carteira</label><input type="text" onChange={e => setTempForm({ ...tempForm, numero_carteira: e.target.value })} /></div>
+                      </>
+                    )}
+                    {showAddForm === 'banco' && (
+                      <>
+                        <div className="form-group"><label>Tipo de Conta</label><input type="text" placeholder="Ex: Corrente, Poupança" onChange={e => setTempForm({ ...tempForm, tipo_conta: e.target.value })} /></div>
+                        <div className="form-group"><label>Titularidade</label><input type="text" onChange={e => setTempForm({ ...tempForm, titularidade: e.target.value })} /></div>
+                        <div className="form-group"><label>Agência</label><input type="text" onChange={e => setTempForm({ ...tempForm, agencia: e.target.value })} /></div>
+                        <div className="form-group"><label>Número Conta</label><input type="text" onChange={e => setTempForm({ ...tempForm, numero: e.target.value })} /></div>
+                      </>
+                    )}
+                    {showAddForm === 'quadro' && (
+                      <>
+                        <div className="form-group"><label>Função Atual</label><input type="text" value={tempForm.funcao_atual || ''} onChange={e => setTempForm({ ...tempForm, funcao_atual: e.target.value })} /></div>
+                        <div className="form-group"><label>Competências / Resumo</label><textarea rows={4} value={tempForm.competencias || ''} onChange={e => setTempForm({ ...tempForm, competencias: e.target.value })} /></div>
+                        <div className="form-group">
+                          <label>CV / Documento (PDF ou JPEG)</label>
+                          <div className="file-input-wrapper">
+                            <input type="file" onChange={e => uploadGenericDoc(e, 'quadro-pessoal')} />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {showAddForm === 'obs' && (
+                      <div className="form-group"><label>Texto da Observação</label><textarea rows={6} onChange={e => setTempForm({ ...tempForm, texto: e.target.value })} /></div>
+                    )}
+                  </div>
+                  <div className="modal-actions" style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                    <button className="btn-back" onClick={() => setShowAddForm(null)}>Cancelar</button>
+                    <button className="btn-save-perfil" onClick={() => {
+                      const endpoint = showAddForm === 'formacao' ? 'formacao-academica' :
+                        showAddForm === 'atividade' ? 'atividade-missionaria' :
+                          showAddForm === 'obras' ? 'obras-realizadas' :
+                            showAddForm === 'saude' ? 'saude' :
+                              showAddForm === 'banco' ? 'contas-bancarias' :
+                                showAddForm === 'obs' ? 'observacoes-gerais' :
+                                  showAddForm === 'quadro' ? 'quadro-pessoal' : '';
+                      handleGenericAdd(endpoint, tempForm);
+                    }}>Confirmar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>{/* fim perfil-main-area */}
+      </div>{/* fim perfil-layout */}
+    </div>
+  );
+};
+
+export default PerfilMissionario;

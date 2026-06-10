@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
-const { sendWelcomeEmail } = require('./emailService');
+const { sendWelcomeEmail, sendFirstAccessNotification } = require('./emailService');
 require('dotenv').config();
 
 // Multer configuration for document uploads
@@ -103,6 +103,42 @@ async function logAccess(usuarioId, tipo, req, detalhes) {
   } catch (err) { console.error('Error logging access:', err); }
 }
 
+async function ensureOptionalSchema() {
+  try {
+    const schemas = [
+      {
+        table: 'tb_casas_religiosas',
+        columns: [
+          { name: 'regional', sql: "ALTER TABLE tb_casas_religiosas ADD COLUMN regional VARCHAR(255)" },
+          { name: 'data_referencia_casa', sql: "ALTER TABLE tb_casas_religiosas ADD COLUMN data_referencia_casa DATE" },
+          { name: 'tipo', sql: "ALTER TABLE tb_casas_religiosas ADD COLUMN tipo ENUM('CR', 'CI', 'M', 'P', 'PV', 'CS') DEFAULT 'CR'" },
+          { name: 'pm_code', sql: "ALTER TABLE tb_casas_religiosas ADD COLUMN pm_code VARCHAR(100) DEFAULT NULL" },
+        ]
+      },
+      {
+        table: 'tb_missionario_casas',
+        columns: [
+          { name: 'pm', sql: "ALTER TABLE tb_missionario_casas ADD COLUMN pm VARCHAR(100) DEFAULT NULL" },
+          { name: 'tipo', sql: "ALTER TABLE tb_missionario_casas ADD COLUMN tipo VARCHAR(20) DEFAULT NULL" },
+          { name: 'pais', sql: "ALTER TABLE tb_missionario_casas ADD COLUMN pais VARCHAR(100) DEFAULT NULL" },
+        ]
+      }
+    ];
+
+    for (const schema of schemas) {
+      for (const column of schema.columns) {
+        const [rows] = await db.query(`SHOW COLUMNS FROM ${schema.table} LIKE ?`, [column.name]);
+        if (rows.length === 0) {
+          await db.query(column.sql);
+          console.log(`[BACKEND] Added missing column ${column.name} to ${schema.table}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[BACKEND] Optional schema ensure failed:', err?.message || err);
+  }
+}
+
 // Login route
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
@@ -167,6 +203,46 @@ app.post('/api/login', async (req, res) => {
     });
   }
 });
+
+// Reset password (public — used on first access from welcome email)
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { login, newPassword } = req.body;
+  if (!login || !newPassword) {
+    return res.status(400).json({ message: 'E-mail e nova senha são obrigatórios.' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres.' });
+  }
+  try {
+    const [rows] = await db.query('SELECT id, nome FROM tb_usuarios WHERE login = ?', [login]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE tb_usuarios SET password_hash = ? WHERE login = ?', [hashed, login]);
+
+    // Respond immediately to the missionary
+    res.json({ success: true, message: 'Senha redefinida com sucesso.' });
+
+    // Fire-and-forget: notify all REGISTRO_REGIONAL users
+    const missionarioNome = rows[0].nome || login;
+    const accessedAt = new Date();
+    db.query("SELECT login FROM tb_usuarios WHERE role = 'REGISTRO_REGIONAL' AND status = 'ATIVO'").then(([registros]) => {
+      if (registros.length === 0) return;
+      console.log(`[EMAIL] Sending first-access notification to ${registros.length} Registro Regional user(s) for: ${missionarioNome}`);
+      for (const reg of registros) {
+        sendFirstAccessNotification(reg.login, missionarioNome, login, accessedAt);
+      }
+    }).catch(err => {
+      console.error('[RESET-PASSWORD] Failed to query REGISTRO_REGIONAL users:', err.message);
+    });
+  } catch (error) {
+    console.error('[RESET-PASSWORD ERROR]', error);
+    res.status(500).json({ message: 'Erro ao redefinir senha.' });
+  }
+});
+
+
 
 // Diagnostic endpoint
 app.get('/api/debug/db-check', async (req, res) => {
@@ -326,18 +402,73 @@ app.get('/api/usuarios/:id', authenticateToken, async (req, res) => {
 
 app.post('/api/usuarios/get', authenticateToken, async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    // Detect if the houses table contains cidade/pais columns; if not, fallback to civil data
+    const [hasCidade] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'cidade'");
+    const [hasPais] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pais'");
+    const [hasPmColumn] = await db.query("SHOW COLUMNS FROM tb_missionario_casas LIKE 'pm'");
+
+    const selectCasaCidade = hasCidade.length > 0
+      ? `(SELECT c.cidade FROM tb_missionario_casas mc JOIN tb_casas_religiosas c ON c.id = mc.casa_id WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1)`
+      : `(SELECT dc.cidade_estado FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1)`;
+
+    const selectCasaPais = hasPais.length > 0
+      ? `(SELECT c.pais FROM tb_missionario_casas mc JOIN tb_casas_religiosas c ON c.id = mc.casa_id WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1)`
+      : `(SELECT dc.pais FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1)`;
+
+    const sql = `
       SELECT 
         u.id, u.nome, u.login, u.role, u.status, u.situacao, u.is_oconomo, u.is_superior, u.permissoes,
-        (SELECT c.nome FROM tb_missionario_casas mc 
-         JOIN tb_casas_religiosas c ON c.id = mc.casa_id 
-         WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) 
-         LIMIT 1) as casa_nome,
-        (SELECT dc.cidade_estado FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1) as cidade,
-        (SELECT dc.pais FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1) as pais
+        (SELECT c.nome FROM tb_missionario_casas mc JOIN tb_casas_religiosas c ON c.id = mc.casa_id WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1) as casa_nome,
+        (SELECT c.endereco FROM tb_missionario_casas mc JOIN tb_casas_religiosas c ON c.id = mc.casa_id WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1) as casa_endereco,
+        ${hasCidade.length > 0 ? `(SELECT c.cidade FROM tb_missionario_casas mc JOIN tb_casas_religiosas c ON c.id = mc.casa_id WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1)` : `NULL`} as casa_cidade,
+        ${selectCasaPais} as pais,
+        ${hasPmColumn.length > 0 ? `(SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = u.id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1)` : `NULL`} as pm,
+        ${hasCidade.length > 0 ? `NULL` : `(SELECT dc.cidade_estado FROM tb_dados_civis dc WHERE dc.usuario_id = u.id LIMIT 1)`} as cidade
       FROM tb_usuarios u
-    `);
-    res.json(rows);
+    `;
+
+    const [rows] = await db.query(sql);
+
+    const extractCityFromAddress = (address) => {
+      if (!address) return null;
+      const normalized = address.replace(/\s+/g, ' ').trim();
+      const matches = Array.from(normalized.matchAll(/([A-Za-zÀ-ÿ ]+?)[,\s-]+([A-Z]{2})(?:\b|$)/gu));
+      if (matches.length > 0) {
+        const lastMatch = matches[matches.length - 1];
+        return `${lastMatch[1].trim().replace(/,\s*$/, '')}/${lastMatch[2]}`;
+      }
+
+      const parts = normalized.split(',').map(part => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const last = parts[parts.length - 1];
+        const secondLast = parts[parts.length - 2];
+        if (/^[A-Z]{2}$/.test(last)) {
+          return `${secondLast}/${last}`;
+        }
+      }
+      return null;
+    };
+
+    const normalizedRows = rows.map(row => {
+      let cidade = row.cidade || null;
+      const houseCity = row.casa_cidade || null;
+      const houseAddress = row.casa_endereco || null;
+
+      if (houseCity) {
+        cidade = houseCity;
+      } else if (houseAddress) {
+        const parsed = extractCityFromAddress(houseAddress);
+        if (parsed) cidade = parsed;
+      }
+
+      const result = { ...row, cidade };
+      delete result.casa_endereco;
+      delete result.casa_cidade;
+      delete result.cidadedc_pais;
+      return result;
+    });
+
+    res.json(normalizedRows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -415,6 +546,17 @@ app.post('/api/usuarios/:id/update', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/usuarios/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query('DELETE FROM tb_usuarios WHERE id = ?', [id]);
+    await logAction(req.user.id, 'EXCLUIU_USUARIO', 'tb_usuarios', `Excluiu usuario ID ${id}`);
+    res.json({ message: 'Usuário excluído com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Religious Houses
 app.get('/api/casas-religiosas', authenticateToken, async (req, res) => {
   try {
@@ -439,13 +581,27 @@ app.post('/api/casas-religiosas/get', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/casas-religiosas', authenticateToken, async (req, res) => {
-  const { nome, endereco, status, regional, data_referencia_casa } = req.body;
+  const { nome, endereco, status, regional, data_referencia_casa, pm_code, tipo } = req.body;
   try {
     const dRef = sanitizeDate(data_referencia_casa);
-    const [result] = await db.query(
-      'INSERT INTO tb_casas_religiosas (nome, endereco, status, regional, data_referencia_casa) VALUES (?, ?, ?, ?, ?)',
-      [nome, endereco, status, regional, dRef]
-    );
+
+    const cols = ['nome','endereco','status'];
+    const params = [nome, endereco, status];
+
+    const [hasRegional] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'regional'");
+    const [hasDataRef] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'data_referencia_casa'");
+    const [hasTipo] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'tipo'");
+    const [hasPmCode] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pm_code'");
+
+    if (hasRegional.length > 0) { cols.push('regional'); params.push(regional || null); }
+    if (hasDataRef.length > 0) { cols.push('data_referencia_casa'); params.push(dRef); }
+    if (hasTipo.length > 0) { cols.push('tipo'); params.push(tipo || null); }
+    if (hasPmCode.length > 0) { cols.push('pm_code'); params.push(pm_code || null); }
+
+    const placeholders = cols.map(() => '?').join(',');
+    const sql = `INSERT INTO tb_casas_religiosas (${cols.join(',')}) VALUES (${placeholders})`;
+    const [result] = await db.query(sql, params);
+
     await logAction(req.user.id, 'CRIAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa "${nome}" criada em ${regional || 'N/A'}`);
     res.status(201).json({ id: result.insertId, ...req.body });
   } catch (error) {
@@ -454,14 +610,29 @@ app.post('/api/casas-religiosas', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
-  const { nome, endereco, status, regional, data_referencia_casa } = req.body;
+  const { nome, endereco, status, regional, data_referencia_casa, pm_code, tipo } = req.body;
   const { id } = req.params;
   try {
     const dRef = sanitizeDate(data_referencia_casa);
-    await db.query(
-      'UPDATE tb_casas_religiosas SET nome = ?, endereco = ?, status = ?, regional = ?, data_referencia_casa = ? WHERE id = ?',
-      [nome, endereco, status, regional, dRef, id]
-    );
+
+    const cols = ['nome','endereco','status'];
+    const params = [nome, endereco, status];
+
+    const [hasRegional] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'regional'");
+    const [hasDataRef] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'data_referencia_casa'");
+    const [hasTipo] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'tipo'");
+    const [hasPmCode] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pm_code'");
+
+    if (hasRegional.length > 0) { cols.push('regional'); params.push(regional || null); }
+    if (hasDataRef.length > 0) { cols.push('data_referencia_casa'); params.push(dRef); }
+    if (hasTipo.length > 0) { cols.push('tipo'); params.push(tipo || null); }
+    if (hasPmCode.length > 0) { cols.push('pm_code'); params.push(pm_code || null); }
+
+    const setClause = cols.map(col => `${col} = ?`).join(', ');
+    const sql = `UPDATE tb_casas_religiosas SET ${setClause} WHERE id = ?`;
+    params.push(id);
+
+    await db.query(sql, params);
     await logAction(req.user.id, 'ATUALIZAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa ID ${id} ("${nome}") atualizada`);
     res.json({ success: true });
   } catch (error) {
@@ -473,18 +644,32 @@ app.get('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM tb_casas_religiosas WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ message: 'Casa não encontrada' });
-    
-    // Also get missionaries currently in this house
+
+    // Get missionaries currently in this house
     const [missionarios] = await db.query(`
-      SELECT u.id, u.nome, u.login, u.situacao
+      SELECT u.id, u.nome, u.login, u.situacao, mc.funcao
       FROM tb_usuarios u
       JOIN tb_missionario_casas mc ON u.id = mc.usuario_id
       WHERE mc.casa_id = ? AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
     `, [req.params.id]);
-    
+
     const house = rows[0];
-    house.missionarios = missionarios;
-    
+    // Strip funcao from the list sent to frontend (keep missionarios clean)
+    house.missionarios = missionarios.map(({ funcao, ...m }) => m);
+
+    // Resolve Pároco and Vigário from the funcao field (can be comma-separated list)
+    const findResponsavel = (role) => {
+      const found = missionarios.find(m => {
+        if (!m.funcao) return false;
+        const funcoes = m.funcao.split(',').map(f => f.trim());
+        return funcoes.includes(role);
+      });
+      return found ? found.nome : null;
+    };
+
+    house.paroco = house.paroco || findResponsavel('Pároco');
+    house.vigario_paroquial = house.vigario_paroquial || findResponsavel('Vigário');
+
     res.json(house);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -634,7 +819,11 @@ app.post('/api/usuarios/:id/dados-religiosos/get', authenticateToken, async (req
 });
 
 app.post('/api/usuarios/:id/dados-religiosos', authenticateToken, async (req, res) => {
-  const { primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante } = req.body;
+  const {
+    primeiros_votos_data, votos_perpetuos_data, lugar_profissao,
+    diaconato_data, presbiterato_data, bispo_ordenante,
+    data_batismo, data_primeira_comunhao, data_crisma
+  } = req.body;
   try {
     console.log(`Updating/Inserting religious data for user ${req.params.id}`);
     const [rows] = await db.query('SELECT * FROM tb_dados_religiosos WHERE usuario_id = ?', [req.params.id]);
@@ -642,21 +831,60 @@ app.post('/api/usuarios/:id/dados-religiosos', authenticateToken, async (req, re
     const dPerpetuos = sanitizeDate(votos_perpetuos_data);
     const dDiaconato = sanitizeDate(diaconato_data);
     const dPresbiterato = sanitizeDate(presbiterato_data);
-    
+    const dBatismo = sanitizeDate(data_batismo);
+    const dComunhao = sanitizeDate(data_primeira_comunhao);
+    const dCrisma = sanitizeDate(data_crisma);
+
     if (rows.length > 0) {
       await db.query(
-        'UPDATE tb_dados_religiosos SET primeiros_votos_data=?, votos_perpetuos_data=?, lugar_profissao=?, diaconato_data=?, presbiterato_data=?, bispo_ordenante=? WHERE usuario_id=?',
-        [dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante, req.params.id]
+        `UPDATE tb_dados_religiosos
+         SET primeiros_votos_data=?, votos_perpetuos_data=?, lugar_profissao=?,
+             diaconato_data=?, presbiterato_data=?, bispo_ordenante=?,
+             data_batismo=?, data_primeira_comunhao=?, data_crisma=?
+         WHERE usuario_id=?`,
+        [dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante,
+         dBatismo, dComunhao, dCrisma, req.params.id]
       );
     } else {
       await db.query(
-        'INSERT INTO tb_dados_religiosos (usuario_id, primeiros_votos_data, votos_perpetuos_data, lugar_profissao, diaconato_data, presbiterato_data, bispo_ordenante) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [req.params.id, dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante]
+        `INSERT INTO tb_dados_religiosos
+         (usuario_id, primeiros_votos_data, votos_perpetuos_data, lugar_profissao,
+          diaconato_data, presbiterato_data, bispo_ordenante,
+          data_batismo, data_primeira_comunhao, data_crisma)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.params.id, dPrimeiros, dPerpetuos, lugar_profissao, dDiaconato, dPresbiterato, bispo_ordenante,
+         dBatismo, dComunhao, dCrisma]
       );
     }
     res.json({ success: true });
   } catch (error) {
     console.error('Error in dados-religiosos:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Upload de documento sacramental (batismo / comunhao / crisma)
+app.post('/api/usuarios/:id/dados-religiosos/upload-sacramento', authenticateToken, (req, res, next) => {
+  upload.single('arquivo')(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message });
+    next();
+  });
+}, async (req, res) => {
+  const { campo } = req.body; // 'doc_batismo' | 'doc_primeira_comunhao' | 'doc_crisma'
+  const allowed = ['doc_batismo', 'doc_primeira_comunhao', 'doc_crisma'];
+  if (!allowed.includes(campo)) return res.status(400).json({ message: 'Campo inválido.' });
+  if (!req.file) return res.status(400).json({ message: 'Arquivo não enviado.' });
+  try {
+    const filePath = `/uploads/documentos/${req.file.filename}`;
+    const [rows] = await db.query('SELECT id FROM tb_dados_religiosos WHERE usuario_id = ?', [req.params.id]);
+    if (rows.length > 0) {
+      await db.query(`UPDATE tb_dados_religiosos SET ${campo}=? WHERE usuario_id=?`, [filePath, req.params.id]);
+    } else {
+      await db.query(`INSERT INTO tb_dados_religiosos (usuario_id, ${campo}) VALUES (?, ?)`, [req.params.id, filePath]);
+    }
+    res.json({ success: true, path: filePath });
+  } catch (error) {
+    console.error('Error uploading sacramento doc:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -701,6 +929,43 @@ app.post('/api/usuarios/:id/endereco-contato', authenticateToken, async (req, re
     res.status(500).json({ message: error.message });
   }
 });
+
+app.get('/api/usuarios/:id/contatos', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT parentesco, nome, endereco, telefone, email FROM tb_contatos WHERE usuario_id = ? ORDER BY id ASC', [req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/usuarios/:id/contatos', authenticateToken, async (req, res) => {
+  const { contatos } = req.body;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query('DELETE FROM tb_contatos WHERE usuario_id = ?', [req.params.id]);
+    if (contatos && contatos.length > 0) {
+      for (const c of contatos) {
+        if ((c.parentesco && c.parentesco.trim()) || (c.nome && c.nome.trim())) {
+          await connection.query(
+            'INSERT INTO tb_contatos (usuario_id, parentesco, nome, endereco, telefone, email) VALUES (?, ?, ?, ?, ?, ?)',
+            [req.params.id, c.parentesco || '', c.nome || '', c.endereco || '', c.telefone || '', c.email || '']
+          );
+        }
+      }
+    }
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error saving contatos:', error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 
 app.get('/api/usuarios/:id/itinerario', authenticateToken, async (req, res) => {
   try {
@@ -806,16 +1071,26 @@ app.get('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res)
 });
 
 app.post('/api/usuarios/:id/casas-historico', authenticateToken, async (req, res) => {
-  const { casa_id, data_inicio, data_fim, funcao, is_superior } = req.body;
+  const { casa_id, data_inicio, data_fim, funcao, is_superior, pm, tipo, pais } = req.body;
   try {
     const dInicio = sanitizeDate(data_inicio);
     const dFim = sanitizeDate(data_fim);
     const superior = is_superior ? 1 : 0;
+    // Build INSERT dynamically if optional columns exist
+    const cols = ['usuario_id','casa_id','data_inicio','data_fim','funcao','is_superior'];
+    const params = [req.params.id, casa_id, dInicio, dFim, funcao, superior];
 
-    const [result] = await db.query(
-      'INSERT INTO tb_missionario_casas (usuario_id, casa_id, data_inicio, data_fim, funcao, is_superior) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.params.id, casa_id, dInicio, dFim, funcao, superior]
-    );
+    const [hasPm] = await db.query("SHOW COLUMNS FROM tb_missionario_casas LIKE 'pm'");
+    const [hasTipo] = await db.query("SHOW COLUMNS FROM tb_missionario_casas LIKE 'tipo'");
+    const [hasPais] = await db.query("SHOW COLUMNS FROM tb_missionario_casas LIKE 'pais'");
+
+    if (hasPm.length > 0) { cols.push('pm'); params.push(pm || null); }
+    if (hasTipo.length > 0) { cols.push('tipo'); params.push(tipo || null); }
+    if (hasPais.length > 0) { cols.push('pais'); params.push(pais || null); }
+
+    const placeholders = cols.map(() => '?').join(',');
+    const sql = `INSERT INTO tb_missionario_casas (${cols.join(',')}) VALUES (${placeholders})`;
+    const [result] = await db.query(sql, params);
     await logAction(req.user.id, 'ADICIONOU_CASA', 'tb_missionario_casas', `Usuário ${req.params.id} vinculado à casa ${casa_id}`);
     res.json({ success: true, id: result.insertId });
   } catch (error) {
@@ -1691,6 +1966,7 @@ const seedAdmin = async () => {
 
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  await ensureOptionalSchema();
   await seedAdmin();
 });
 
