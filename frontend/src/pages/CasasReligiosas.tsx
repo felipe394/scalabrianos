@@ -95,7 +95,7 @@ const CasasReligiosas: React.FC = () => {
       if (editingHouse.id === 0) {
         await api.post('/casas-religiosas', editingHouse);
       } else {
-        await api.put(`/casas-religiosas/${editingHouse.id}`, editingHouse);
+        await api.post(`/casas-religiosas/${editingHouse.id}/update`, editingHouse);
       }
       await fetchHouses();
       setIsModalOpen(false);

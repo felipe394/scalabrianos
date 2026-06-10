@@ -674,7 +674,7 @@ app.post('/api/casas-religiosas', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
-  const { nome, endereco, status, regional, data_referencia_casa, pm_code, tipo } = req.body;
+  const { nome, endereco, status, regional, data_referencia_casa, pm_code, tipo, cidade, pais } = req.body;
   const { id } = req.params;
   try {
     const dRef = sanitizeDate(data_referencia_casa);
@@ -686,11 +686,15 @@ app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
     const [hasDataRef] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'data_referencia_casa'");
     const [hasTipo] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'tipo'");
     const [hasPmCode] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pm_code'");
+    const [hasCidade] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'cidade'");
+    const [hasPais] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pais'");
 
     if (hasRegional.length > 0) { cols.push('regional'); params.push(regional || null); }
     if (hasDataRef.length > 0) { cols.push('data_referencia_casa'); params.push(dRef); }
     if (hasTipo.length > 0) { cols.push('tipo'); params.push(tipo || null); }
     if (hasPmCode.length > 0) { cols.push('pm_code'); params.push(pm_code || null); }
+    if (hasCidade.length > 0) { cols.push('cidade'); params.push(cidade || null); }
+    if (hasPais.length > 0) { cols.push('pais'); params.push(pais || null); }
 
     const setClause = cols.map(col => `${col} = ?`).join(', ');
     const sql = `UPDATE tb_casas_religiosas SET ${setClause} WHERE id = ?`;
@@ -703,6 +707,43 @@ app.put('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// Alias for POST to avoid 403 Forbidden on PUT in some production servers
+app.post('/api/casas-religiosas/:id/update', authenticateToken, async (req, res) => {
+  const { nome, endereco, status, regional, data_referencia_casa, pm_code, tipo, cidade, pais } = req.body;
+  const { id } = req.params;
+  try {
+    const dRef = sanitizeDate(data_referencia_casa);
+
+    const cols = ['nome','endereco','status'];
+    const params = [nome, endereco, status];
+
+    const [hasRegional] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'regional'");
+    const [hasDataRef] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'data_referencia_casa'");
+    const [hasTipo] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'tipo'");
+    const [hasPmCode] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pm_code'");
+    const [hasCidade] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'cidade'");
+    const [hasPais] = await db.query("SHOW COLUMNS FROM tb_casas_religiosas LIKE 'pais'");
+
+    if (hasRegional.length > 0) { cols.push('regional'); params.push(regional || null); }
+    if (hasDataRef.length > 0) { cols.push('data_referencia_casa'); params.push(dRef); }
+    if (hasTipo.length > 0) { cols.push('tipo'); params.push(tipo || null); }
+    if (hasPmCode.length > 0) { cols.push('pm_code'); params.push(pm_code || null); }
+    if (hasCidade.length > 0) { cols.push('cidade'); params.push(cidade || null); }
+    if (hasPais.length > 0) { cols.push('pais'); params.push(pais || null); }
+
+    const setClause = cols.map(col => `${col} = ?`).join(', ');
+    const sql = `UPDATE tb_casas_religiosas SET ${setClause} WHERE id = ?`;
+    params.push(id);
+
+    await db.query(sql, params);
+    await logAction(req.user.id, 'ATUALIZAR_CASA_RELIGIOSA', 'tb_casas_religiosas', `Casa ID ${id} ("${nome}") atualizada (via POST)`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 app.get('/api/casas-religiosas/:id', authenticateToken, async (req, res) => {
   try {
