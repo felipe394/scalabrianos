@@ -99,7 +99,7 @@ app.use(['/api/health', '/health'], (req, res) => {
 // Logs helper function
 async function logAction(usuarioId, acao, tabela, detalhes) {
   try {
-    await db.query('INSERT INTO tb_logs (usuario_id, acao, tabela_afetada, detalhes) VALUES (?, ?, ?, ?)', [usuarioId, acao, tabela, detalhes]);
+    await db.query('INSERT INTO tb_logs (usuario_id, acao, entidade, detalhes) VALUES (?, ?, ?, ?)', [usuarioId, acao, tabela, detalhes]);
   } catch (err) { console.error('Error logging action:', err); }
 }
 

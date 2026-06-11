@@ -42,6 +42,12 @@
       "error_loading": "Erro ao carregar missionários",
       "empty": "Nenhum missionário encontrado",
       "search_placeholder": "Pesquisar por nome, presença, cidade, país ou situação...",
+      "situations": {
+        "ativo": "Ativo",
+        "falecido": "Falecido",
+        "egresso": "Egresso",
+        "exclaustrado": "Exclaustrado"
+      },
       "filters": {
         "name": "BUSCAR POR NOME",
         "situation": "SITUAÇÃO",
@@ -386,6 +392,47 @@
       "consolidado_title": "Gestão de Fechamento Mensal",
       "consolidado_desc": "Aprovação geral da casa para o mês selecionado.",
       "reviewing": "Revisando"
+    },
+    "profiles_page": {
+      "title": "Gestão de Perfis",
+      "new_btn": "+ Novo Perfil",
+      "filters": {
+        "search": "BUSCAR POR NOME",
+        "role": "PERFIL / CARGO",
+        "all": "Todos"
+      },
+      "table": {
+        "id": "ID",
+        "name": "Nome",
+        "login": "Login (E-mail)",
+        "role": "Perfil",
+        "status": "Status",
+        "situation": "Situação",
+        "actions": "Ações"
+      },
+      "modal": {
+        "new_title": "Novo Perfil de Usuário",
+        "edit_title": "Dados do Perfil",
+        "full_name": "Nome Completo",
+        "login": "Login (E-mail)",
+        "password_new": "Senha",
+        "password_edit": "Nova Senha (deixe em branco para manter)",
+        "role": "Perfil / Cargo",
+        "status": "Status",
+        "cancel": "Cancelar",
+        "create_btn": "Criar Perfil",
+        "save_btn": "Salvar Alterações"
+      },
+      "status": {
+        "ativo": "ATIVO",
+        "inativo": "INATIVO"
+      },
+      "roles": {
+        "admin_geral": "Administrador Geral",
+        "administrador": "Administrador",
+        "colaborador": "Colaborador",
+        "intermitente": "Intermitente"
+      }
     }
   }
 }

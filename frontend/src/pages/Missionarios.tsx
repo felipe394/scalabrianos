@@ -632,10 +632,10 @@ const Missionarios: React.FC = () => {
           <label>SITUAÇÃO</label>
           <select value={situacaoFilter} onChange={e => setSituacaoFilter(e.target.value)}>
             <option value="">{t('missionaries.filters.all')}</option>
-            <option value="ATIVO">Ativo</option>
-            <option value="FALECIDO">Falecido</option>
-            <option value="EGRESSO">Egresso</option>
-            <option value="EXCLAUSTRADO">Exclaustrado</option>
+            <option value="ATIVO">{t('missionaries.situations.ativo', 'Ativo')}</option>
+            <option value="FALECIDO">{t('missionaries.situations.falecido', 'Falecido')}</option>
+            <option value="EGRESSO">{t('missionaries.situations.egresso', 'Egresso')}</option>
+            <option value="EXCLAUSTRADO">{t('missionaries.situations.exclaustrado', 'Exclaustrado')}</option>
           </select>
         </div>
         <div className="filter-group">
@@ -679,7 +679,11 @@ const Missionarios: React.FC = () => {
                   <td>{m.casa_nome || '---'}</td>
                   <td>{m.cidade || '---'}</td>
                   <td>{m.pais || '---'}</td>
-                  <td className="center"><span className={`situacao-tag ${(m.situacao || '').toLowerCase()}`}>{m.situacao}</span></td>
+                  <td className="center">
+                    <span className={`situacao-tag ${(m.situacao || '').toLowerCase()}`}>
+                      {t(`missionaries.situations.${(m.situacao || '').toLowerCase()}`, m.situacao)}
+                    </span>
+                  </td>
                   <td className="center">
                     <button className="btn-action-lite" title={t('missionaries.table.view_details')} onClick={() => navigate(`/missionarios/${m.id}`)}>
                       <Eye size={18} />
@@ -756,10 +760,10 @@ const Missionarios: React.FC = () => {
                     <div className="form-group">
                       <label>{t('missionaries.wizard.civil.situation')}</label>
                       <select value={wizardData.situacao} onChange={e => set('situacao', e.target.value)}>
-                        <option value="ATIVO">Ativo</option>
-                        <option value="FALECIDO">Falecido</option>
-                        <option value="EGRESSO">Egresso</option>
-                        <option value="EXCLAUSTRADO">Exclaustrado</option>
+                        <option value="ATIVO">{t('missionaries.situations.ativo', 'Ativo')}</option>
+                        <option value="FALECIDO">{t('missionaries.situations.falecido', 'Falecido')}</option>
+                        <option value="EGRESSO">{t('missionaries.situations.egresso', 'Egresso')}</option>
+                        <option value="EXCLAUSTRADO">{t('missionaries.situations.exclaustrado', 'Exclaustrado')}</option>
                       </select>
                     </div>
                   </div>
@@ -1437,7 +1441,10 @@ const Missionarios: React.FC = () => {
                     <h4>{t('missionaries.wizard.access.summary')}</h4>
                     <div className="summary-row"><span>{t('missionaries.table.name')}</span><strong>{wizardData.nome || '—'}</strong></div>
                     <div className="summary-row"><span>{t('missionaries.table.login')}</span><strong>{wizardData.login || '—'}</strong></div>
-                    <div className="summary-row"><span>{t('missionaries.table.situation')}</span><strong>{wizardData.situacao}</strong></div>
+                    <div className="summary-row">
+                      <span>{t('missionaries.table.situation')}</span>
+                      <strong>{t(`missionaries.situations.${(wizardData.situacao || '').toLowerCase()}`, wizardData.situacao)}</strong>
+                    </div>
                     <div className="summary-row"><span>{t('missionaries.table.oconomo')}</span><strong>{wizardData.is_oconomo ? t('common.yes') : t('common.no')}</strong></div>
                     <div className="summary-row"><span>{t('missionaries.table.superior')}</span><strong>{wizardData.is_superior ? t('common.yes') : t('common.no')}</strong></div>
                     <div className="summary-row"><span>{t('menu.houses')}</span><strong>{casasVinculos.length}</strong></div>

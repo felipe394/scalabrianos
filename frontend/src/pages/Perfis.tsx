@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Lock, Eye, EyeOff, X, Save, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth, type UserRole } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import api from '../api';
 import '../styles/Perfis.css';
 
@@ -16,6 +17,7 @@ interface UserProfile {
 
 const Perfis: React.FC = () => {
   const { canEdit } = useAuth();
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ const Perfis: React.FC = () => {
       setError(null);
     } catch (err: any) {
       console.error('Error fetching profiles:', err);
-      setError('Erro ao carregar perfis');
+      setError(t('profiles_page.error', 'Erro ao carregar perfis'));
     } finally {
       setIsLoading(false);
     }
@@ -45,10 +47,10 @@ const Perfis: React.FC = () => {
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
-      case 'ADMIN_GERAL': return 'Administrador Geral';
-      case 'ADMINISTRADOR': return 'Administrador';
-      case 'COLABORADOR': return 'Colaborador';
-      case 'INTERMITENTE': return 'Intermitente';
+      case 'ADMIN_GERAL': return t('profiles_page.roles.admin_geral', 'Administrador Geral');
+      case 'ADMINISTRADOR': return t('profiles_page.roles.administrador', 'Administrador');
+      case 'COLABORADOR': return t('profiles_page.roles.colaborador', 'Colaborador');
+      case 'INTERMITENTE': return t('profiles_page.roles.intermitente', 'Intermitente');
       default: return role;
     }
   };
@@ -87,7 +89,7 @@ const Perfis: React.FC = () => {
       setEditingProfile(null);
     } catch (err) {
       console.error('Error saving profile:', err);
-      alert('Erro ao salvar perfil');
+      alert(t('profiles_page.error_saving', 'Erro ao salvar perfil'));
     } finally {
       setSaveLoading(false);
     }
@@ -98,60 +100,60 @@ const Perfis: React.FC = () => {
       <div className="page-header">
         <div className="title-with-badge">
           <Lock size={24} />
-          <h2>Gestão de Perfis</h2>
+          <h2>{t('profiles_page.title', 'Gestão de Perfis')}</h2>
         </div>
         {canEdit && (
           <button className="btn-new" onClick={handleNewProfile}>
-            + Novo Perfil
+            {t('profiles_page.new_btn', '+ Novo Perfil')}
           </button>
         )}
       </div>
 
       <div className="filters-card">
         <div className="filter-group">
-          <label>BUSCAR POR NOME</label>
+          <label>{t('profiles_page.filters.search', 'BUSCAR POR NOME')}</label>
           <div className="search-input">
-            <input type="text" placeholder="Pesquisar..." />
+            <input type="text" placeholder={t('missionaries.search_placeholder', 'Pesquisar...')} />
             <Search size={18} />
           </div>
         </div>
         <div className="filter-group">
-          <label>PERFIL / CARGO</label>
+          <label>{t('profiles_page.filters.role', 'PERFIL / CARGO')}</label>
           <select>
-            <option value="">Todos</option>
-            <option value="ADMIN_GERAL">Administrador Geral</option>
-            <option value="ADMINISTRADOR">Administrador</option>
-            <option value="COLABORADOR">Colaborador</option>
+            <option value="">{t('profiles_page.filters.all', 'Todos')}</option>
+            <option value="ADMIN_GERAL">{t('profiles_page.roles.admin_geral', 'Administrador Geral')}</option>
+            <option value="ADMINISTRADOR">{t('profiles_page.roles.administrador', 'Administrador')}</option>
+            <option value="COLABORADOR">{t('profiles_page.roles.colaborador', 'Colaborador')}</option>
           </select>
         </div>
         <button className="btn-filter">
-          <Filter size={18} /> Filtrar
+          <Filter size={18} /> {t('missionaries.filters.filter_btn', 'Filtrar')}
         </button>
       </div>
 
       {isLoading ? (
         <div className="loading-state">
           <Loader2 className="animate-spin" size={32} />
-          <p>Carregando perfis...</p>
+          <p>{t('profiles_page.loading', 'Carregando perfis...')}</p>
         </div>
       ) : error ? (
         <div className="error-state">
           <AlertCircle size={32} />
           <p>{error}</p>
-          <button onClick={fetchProfiles} className="btn-retry">Tentar novamente</button>
+          <button onClick={fetchProfiles} className="btn-retry">{t('profiles_page.retry', 'Tentar novamente')}</button>
         </div>
       ) : (
         <div className="data-table">
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Login (E-mail)</th>
-                <th className="center">Perfil</th>
-                <th className="center">Status</th>
-                <th className="center">Situação</th>
-                <th>Ações</th>
+                <th>{t('profiles_page.table.id', 'ID')}</th>
+                <th>{t('profiles_page.table.name', 'Nome')}</th>
+                <th>{t('profiles_page.table.login', 'Login (E-mail)')}</th>
+                <th className="center">{t('profiles_page.table.role', 'Perfil')}</th>
+                <th className="center">{t('profiles_page.table.status', 'Status')}</th>
+                <th className="center">{t('profiles_page.table.situation', 'Situação')}</th>
+                <th>{t('profiles_page.table.actions', 'Ações')}</th>
               </tr>
             </thead>
             <tbody>
@@ -167,16 +169,16 @@ const Perfis: React.FC = () => {
                   </td>
                   <td className="center">
                     <span className={`status-tag ${profile.status.toLowerCase()}`}>
-                      {profile.status}
+                      {t(`profiles_page.status.${profile.status.toLowerCase()}`, profile.status)}
                     </span>
                   </td>
                   <td className="center">
                     <span className={`situacao-tag ${profile.situacao.toLowerCase()}`}>
-                      {profile.situacao}
+                      {t(`missionaries.situations.${profile.situacao.toLowerCase()}`, profile.situacao)}
                     </span>
                   </td>
                   <td>
-                    <button className="btn-icon-view" title="Visualizar" onClick={() => handleOpenEdit(profile)}>
+                    <button className="btn-icon-view" title={t('missionaries.table.view_details')} onClick={() => handleOpenEdit(profile)}>
                       <Eye size={18} />
                     </button>
                   </td>
@@ -191,14 +193,14 @@ const Perfis: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>{editingProfile.id === 0 ? 'Novo Perfil de Usuário' : 'Dados do Perfil'}</h3>
+              <h3>{editingProfile.id === 0 ? t('profiles_page.modal.new_title', 'Novo Perfil de Usuário') : t('profiles_page.modal.edit_title', 'Dados do Perfil')}</h3>
               <button className="close-btn" onClick={() => setIsModalOpen(false)}>
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSaveProfile}>
               <div className="form-group">
-                <label>Nome Completo</label>
+                <label>{t('profiles_page.modal.full_name', 'Nome Completo')}</label>
                 <input
                   type="text"
                   value={editingProfile.nome}
@@ -207,7 +209,7 @@ const Perfis: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Login (E-mail)</label>
+                <label>{t('profiles_page.modal.login', 'Login (E-mail)')}</label>
                 <input
                   type="email"
                   value={editingProfile.login}
@@ -216,7 +218,7 @@ const Perfis: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>{editingProfile.id === 0 ? 'Senha' : 'Nova Senha (deixe em branco para manter)'}</label>
+                <label>{editingProfile.id === 0 ? t('profiles_page.modal.password_new', 'Senha') : t('profiles_page.modal.password_edit', 'Nova Senha (deixe em branco para manter)')}</label>
                 <div className="password-group">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -228,39 +230,39 @@ const Perfis: React.FC = () => {
                     type="button"
                     className="password-toggle"
                     onClick={() => setShowPassword(!showPassword)}
-                    title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    title={showPassword ? t('common.hide_password', 'Ocultar senha') : t('common.show_password', 'Mostrar senha')}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
               </div>
               <div className="form-group">
-                <label>Perfil / Cargo</label>
+                <label>{t('profiles_page.modal.role', 'Perfil / Cargo')}</label>
                 <select
                   value={editingProfile.role}
                   onChange={(e) => setEditingProfile({ ...editingProfile, role: e.target.value as UserRole })}
                 >
-                  <option value="ADMIN_GERAL">Administrador Geral</option>
-                  <option value="ADMINISTRADOR">Administrador</option>
-                  <option value="COLABORADOR">Colaborador</option>
-                  <option value="INTERMITENTE">Intermitente</option>
+                  <option value="ADMIN_GERAL">{t('profiles_page.roles.admin_geral', 'Administrador Geral')}</option>
+                  <option value="ADMINISTRADOR">{t('profiles_page.roles.administrador', 'Administrador')}</option>
+                  <option value="COLABORADOR">{t('profiles_page.roles.colaborador', 'Colaborador')}</option>
+                  <option value="INTERMITENTE">{t('profiles_page.roles.intermitente', 'Intermitente')}</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Status</label>
+                <label>{t('profiles_page.modal.status', 'Status')}</label>
                 <select
                   value={editingProfile.status}
                   onChange={(e) => setEditingProfile({ ...editingProfile, status: e.target.value as 'ATIVO' | 'INATIVO' })}
                 >
-                  <option value="ATIVO">ATIVO</option>
-                  <option value="INATIVO">INATIVO</option>
+                  <option value="ATIVO">{t('profiles_page.status.ativo', 'ATIVO')}</option>
+                  <option value="INATIVO">{t('profiles_page.status.inativo', 'INATIVO')}</option>
                 </select>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>{t('profiles_page.modal.cancel', 'Cancelar')}</button>
                 <button type="submit" className="btn-save" disabled={saveLoading}>
                   {saveLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                  {editingProfile.id === 0 ? 'Criar Perfil' : 'Salvar Alterações'}
+                  {editingProfile.id === 0 ? t('profiles_page.modal.create_btn', 'Criar Perfil') : t('profiles_page.modal.save_btn', 'Salvar Alterações')}
                 </button>
               </div>
             </form>
