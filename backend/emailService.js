@@ -34,18 +34,18 @@ async function sendWelcomeEmail(email, nome, password) {
     const info = await transporter.sendMail({
       from: `"Sistema Scalabrinianos" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: email,
-      subject: "Seja bem-vindo ao Sistema Scalabrianos",
+      subject: "Seja bem-vindo ao Sistema Scalabrinianos",
       text: `Olá ${nome},\n\nSeu cadastro no Sistema Scalabrinianos foi realizado com sucesso.\n\nPara o seu primeiro acesso, utilize as credenciais abaixo:\n\nE-mail: ${email}\nSenha: ${password}\n\nSe desejar redefinir sua senha antes do primeiro login, acesse:\n${resetUrl}\n\nRecomendamos que você altere sua senha após o primeiro login.\n\nAtenciosamente,\nEquipe Scalabrinianos`,
       html: `
         <div style="font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; color: #1f2937; background: #f8fafc; padding: 32px;">
           <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);">
             <div style="background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%); padding: 32px; color: #ffffff;">
               <h1 style="margin: 0; font-size: 28px; letter-spacing: -0.5px;">Bem-vindo, ${nome}</h1>
-              <p style="margin: 12px 0 0; font-size: 16px; color: rgba(255,255,255,0.85);">Seu acesso ao Sistema Scalabrianos foi criado com sucesso.</p>
+              <p style="margin: 12px 0 0; font-size: 16px; color: rgba(255,255,255,0.85);">Seu acesso ao Sistema Scalabrinianos foi criado com sucesso.</p>
             </div>
             <div style="padding: 32px;">
               <p style="font-size: 16px; margin: 0 0 18px;">Olá <strong>${nome}</strong>,</p>
-              <p style="font-size: 15px; line-height: 1.8; color: #475569; margin: 0 0 24px;">Seu cadastro no <strong>Scalabrianos</strong> está pronto. Use as credenciais abaixo para o primeiro acesso ao sistema:</p>
+              <p style="font-size: 15px; line-height: 1.8; color: #475569; margin: 0 0 24px;">Seu cadastro no <strong>Scalabrinianos</strong> está pronto. Use as credenciais abaixo para o primeiro acesso ao sistema:</p>
               <div style="border: 1px solid #e2e8f0; border-radius: 18px; padding: 22px; background: #f8fafc; margin-bottom: 28px;">
                 <p style="margin: 0 0 10px; font-size: 14px; color: #334155;"><strong>E-mail</strong>: ${email}</p>
                 <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Senha</strong>: ${password}</p>
@@ -57,7 +57,7 @@ async function sendWelcomeEmail(email, nome, password) {
               </div>
             </div>
             <div style="background: #f8fafc; padding: 24px 32px; color: #64748b; font-size: 13px;">
-              <p style="margin: 0;">Atenciosamente,<br/><strong>Equipe Scalabrianos</strong></p>
+              <p style="margin: 0;">Atenciosamente,<br/><strong>Equipe Scalabrinianos</strong></p>
             </div>
           </div>
         </div>
