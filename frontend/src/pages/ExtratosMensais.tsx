@@ -11,6 +11,10 @@ interface ExtratoMes {
   total_debito: number;
   saldo: number;
   data_validacao: string;
+  nome_missionario?: string;
+  nome_casa?: string;
+  casa_id?: number;
+  usuario_id?: number;
 }
 
 interface Categoria {
@@ -31,9 +35,16 @@ interface DetalhesPlanilha {
 
 const ExtratosMensais: React.FC = () => {
   const { user } = useAuth();
+  
+  const isOconomo = user?.role === 'ECONOMO_LOCAL' || user?.role === 'ECONOMO_REGIONAL' || !!user?.is_oconomo;
+  
   const [extratos, setExtratos] = useState<ExtratoMes[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [casas, setCasas] = useState<{ id: number; nome: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterMes, setFilterMes] = useState('');
+  const [filterCasa, setFilterCasa] = useState('');
+  const [activeTab, setActiveTab] = useState<'missionario' | 'comunidade'>('missionario');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -45,20 +56,25 @@ const ExtratosMensais: React.FC = () => {
   const [isModalLoading, setIsModalLoading] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
+    setCurrentPage(1);
+    setFilterCasa('');
+  }, [filterMes, activeTab]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [extratosRes, catRes] = await Promise.all([
-        api.get(`/financas-mensais/usuario/${user?.id}/extratos`),
-        api.get('/categorias-financas')
+      let extratosUrl = `/financas-mensais/usuario/${user?.id}/extratos`;
+      if (isOconomo) {
+        extratosUrl = activeTab === 'missionario' ? '/extratos/missionarios' : '/extratos/casas';
+      }
+      const [extratosRes, catRes, casasRes] = await Promise.all([
+        api.get(extratosUrl),
+        api.get('/categorias-financas'),
+        api.get('/casas-religiosas')
       ]);
       setExtratos(extratosRes.data || []);
       setCategorias(catRes.data || []);
+      setCasas(casasRes.data || []);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -66,12 +82,25 @@ const ExtratosMensais: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, activeTab]);
+
   const handleOpenDetails = async (extrato: ExtratoMes) => {
     setSelectedExtrato(extrato);
     setIsModalLoading(true);
     setDetalhes(null);
     try {
-      const res = await api.get(`/financas-mensais/usuario/${user?.id}/mes/${extrato.mes_referencia}`);
+      let url = '';
+      if (isOconomo && activeTab === 'comunidade') {
+        url = `/financas-comunidade/${extrato.casa_id}/${extrato.mes_referencia}?usuario_id=${extrato.usuario_id}`;
+      } else {
+        const uid = extrato.usuario_id || user?.id;
+        url = `/financas-mensais/usuario/${uid}/mes/${extrato.mes_referencia}`;
+      }
+      const res = await api.get(url);
       setDetalhes(res.data);
     } catch (err) {
       console.error('Erro ao buscar detalhes', err);
@@ -85,9 +114,16 @@ const ExtratosMensais: React.FC = () => {
     return categorias.find(c => c.id === id)?.nome || 'Categoria Desconhecida';
   };
 
+  // Filter Logic
+  const filteredExtratos = extratos.filter(ext => {
+    const matchesMes = filterMes ? ext.mes_referencia === filterMes : true;
+    const matchesCasa = filterCasa ? ext.casa_id?.toString() === filterCasa : true;
+    return matchesMes && matchesCasa;
+  });
+
   // Pagination Logic
-  const totalPages = Math.ceil(extratos.length / itemsPerPage);
-  const paginatedExtratos = extratos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(filteredExtratos.length / itemsPerPage);
+  const paginatedExtratos = filteredExtratos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   if (isLoading) {
     return (
@@ -106,91 +142,242 @@ const ExtratosMensais: React.FC = () => {
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#1e293b', margin: 0 }}>Extratos Mensais</h1>
           <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-            Histórico consolidado das suas prestações de contas validadas.
+            {isOconomo 
+              ? 'Histórico consolidado das prestações de contas validadas.'
+              : 'Histórico consolidado das suas prestações de contas validadas.'}
           </p>
         </div>
       </div>
+
+      {/* Tab Switcher for Economists */}
+      {isOconomo && (
+        <div className="tab-menu" style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+          <button
+            onClick={() => setActiveTab('missionario')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '14px',
+              cursor: 'pointer',
+              background: activeTab === 'missionario' ? '#013375' : 'transparent',
+              color: activeTab === 'missionario' ? 'white' : '#64748b',
+              transition: 'all 0.2s'
+            }}
+          >
+            Extratos dos Missionários
+          </button>
+          <button
+            onClick={() => setActiveTab('comunidade')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '14px',
+              cursor: 'pointer',
+              background: activeTab === 'comunidade' ? '#013375' : 'transparent',
+              color: activeTab === 'comunidade' ? 'white' : '#64748b',
+              transition: 'all 0.2s'
+            }}
+          >
+            Extratos da Casa Religiosa
+          </button>
+        </div>
+      )}
 
       {extratos.length === 0 ? (
         <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '16px', padding: '48px', textAlign: 'center' }}>
           <Calendar size={48} color="#94a3b8" style={{ marginBottom: '16px' }} />
           <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#475569', margin: '0 0 8px 0' }}>Nenhum extrato validado</h3>
           <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>
-            Você ainda não possui planilhas validadas para visualização do extrato.
+            Não há prestações de contas validadas correspondentes para visualização do extrato.
           </p>
         </div>
       ) : (
-        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Mês Referência</th>
-                  <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Data Validação</th>
-                  <th style={{ padding: '16px 20px', color: '#059669', fontWeight: 600, fontSize: '14px' }}>Receitas</th>
-                  <th style={{ padding: '16px 20px', color: '#dc2626', fontWeight: 600, fontSize: '14px' }}>Despesas</th>
-                  <th style={{ padding: '16px 20px', color: '#0f172a', fontWeight: 600, fontSize: '14px' }}>Saldo</th>
-                  <th style={{ padding: '16px 20px', textAlign: 'center', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedExtratos.map(ext => (
-                  <tr key={ext.id} style={{ borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' }}>
-                    <td style={{ padding: '16px 20px', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Calendar size={16} color="#64748b" />
-                        {ext.mes_referencia}
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '14px' }}>
-                      {ext.data_validacao ? new Date(ext.data_validacao).toLocaleDateString('pt-BR') : '-'}
-                    </td>
-                    <td style={{ padding: '16px 20px', color: '#059669', fontWeight: 600 }}>
-                      R$ {Number(ext.total_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '16px 20px', color: '#dc2626', fontWeight: 600 }}>
-                      R$ {Number(ext.total_debito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '16px 20px', color: Number(ext.saldo) >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>
-                      R$ {Number(ext.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '16px 20px', textAlign: 'center' }}>
-                      <button 
-                        onClick={() => handleOpenDetails(ext)}
-                        style={{ background: '#eef2ff', color: '#4f46e5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px', transition: 'background 0.2s' }}
-                      >
-                        <Eye size={16} /> Ver Detalhes
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-              <span style={{ fontSize: '14px', color: '#64748b' }}>Página {currentPage} de {totalPages}</span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  style={{ background: currentPage === 1 ? '#e2e8f0' : 'white', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <button 
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  style={{ background: currentPage === totalPages ? '#e2e8f0' : 'white', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
-                >
-                  <ChevronRight size={18} />
-                </button>
+        <>
+          {/* Filtro por Mês de Referência */}
+          <div style={{ 
+            background: '#fff', 
+            padding: '16px 20px', 
+            borderRadius: '12px', 
+            border: '1px solid #e2e8f0', 
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Calendar size={14} color="#64748b" /> Buscar por Mês/Ano:
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input 
+                  type="month" 
+                  value={filterMes} 
+                  onChange={e => setFilterMes(e.target.value)} 
+                  style={{ 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #cbd5e1', 
+                    fontSize: '14px', 
+                    color: '#1e293b',
+                    outline: 'none',
+                    background: '#fff',
+                    fontWeight: 600
+                  }} 
+                />
+                {filterMes && (
+                  <button 
+                    onClick={() => setFilterMes('')}
+                    style={{ 
+                      background: '#f1f5f9', 
+                      border: '1px solid #cbd5e1', 
+                      color: '#475569', 
+                      padding: '8px 12px', 
+                      borderRadius: '8px', 
+                      cursor: 'pointer', 
+                      fontSize: '13px', 
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    Limpar
+                  </button>
+                )}
               </div>
             </div>
+
+            {isOconomo && (user?.role === 'ECONOMO_REGIONAL' || user?.role === 'ADMIN_GERAL') && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '220px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                  Casa Religiosa:
+                </label>
+                <select
+                  value={filterCasa}
+                  onChange={e => setFilterCasa(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #cbd5e1', 
+                    fontSize: '14px', 
+                    color: '#1e293b',
+                    outline: 'none',
+                    background: '#fff',
+                    fontWeight: 600,
+                    height: '38px'
+                  }}
+                >
+                  <option value="">Todas as Casas</option>
+                  {casas.map(c => (
+                    <option key={c.id} value={c.id.toString()}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {filteredExtratos.length === 0 ? (
+            <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '16px', padding: '32px', textAlign: 'center' }}>
+              <p style={{ color: '#64748b', margin: 0, fontSize: '14px', fontWeight: 600 }}>
+                Nenhum extrato encontrado para o mês selecionado.
+              </p>
+            </div>
+          ) : (
+            <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Mês Referência</th>
+                      {isOconomo && (
+                        <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Casa Religiosa</th>
+                      )}
+                      {isOconomo && activeTab === 'missionario' && (
+                        <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Missionário</th>
+                      )}
+                      <th style={{ padding: '16px 20px', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Data Validação</th>
+                      <th style={{ padding: '16px 20px', color: '#059669', fontWeight: 600, fontSize: '14px' }}>Receitas</th>
+                      <th style={{ padding: '16px 20px', color: '#dc2626', fontWeight: 600, fontSize: '14px' }}>Despesas</th>
+                      <th style={{ padding: '16px 20px', color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>Saldo</th>
+                      <th style={{ padding: '16px 20px', textAlign: 'center', color: '#475569', fontWeight: 600, fontSize: '14px' }}>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedExtratos.map(ext => (
+                      <tr key={`${activeTab}-${ext.id}`} style={{ borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' }}>
+                        <td style={{ padding: '16px 20px', fontWeight: 600, color: '#1e293b', textTransform: 'capitalize' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Calendar size={16} color="#64748b" />
+                            {ext.mes_referencia}
+                          </div>
+                        </td>
+                        {isOconomo && (
+                          <td style={{ padding: '16px 20px', color: '#1e293b', fontWeight: 500 }}>
+                            {ext.nome_casa || 'SEDE'}
+                          </td>
+                        )}
+                        {isOconomo && activeTab === 'missionario' && (
+                          <td style={{ padding: '16px 20px', color: '#334155', fontWeight: 600 }}>
+                            {ext.nome_missionario || 'N/A'}
+                          </td>
+                        )}
+                        <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '14px' }}>
+                          {ext.data_validacao ? new Date(ext.data_validacao).toLocaleDateString('pt-BR') : '-'}
+                        </td>
+                        <td style={{ padding: '16px 20px', color: '#059669', fontWeight: 600 }}>
+                          R$ {Number(ext.total_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: '16px 20px', color: '#dc2626', fontWeight: 600 }}>
+                          R$ {Number(ext.total_debito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: '16px 20px', color: Number(ext.saldo) >= 0 ? '#059669' : '#dc2626', fontWeight: 700 }}>
+                          R$ {Number(ext.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                          <button 
+                            onClick={() => handleOpenDetails(ext)}
+                            style={{ background: '#eef2ff', color: '#4f46e5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px', transition: 'background 0.2s' }}
+                          >
+                            <Eye size={16} /> Ver Detalhes
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                  <span style={{ fontSize: '14px', color: '#64748b' }}>Página {currentPage} de {totalPages}</span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      style={{ background: currentPage === 1 ? '#e2e8f0' : 'white', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button 
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      style={{ background: currentPage === totalPages ? '#e2e8f0' : 'white', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Detalhes Modal */}

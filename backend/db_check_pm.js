@@ -1,8 +1,7 @@
-const db = require('./db');
-
+const pool = require('./db');
 async function run() {
   try {
-    const [rows] = await db.query('SELECT id, usuario_id, casa_id, data_inicio, funcao, pm, tipo, pais FROM tb_missionario_casas ORDER BY id DESC LIMIT 20');
+    const [rows] = await pool.query("SELECT id, usuario_id, mes_referencia, status FROM tb_financas_mensais ORDER BY id DESC LIMIT 10");
     console.log(rows);
     process.exit(0);
   } catch (err) {
@@ -10,5 +9,4 @@ async function run() {
     process.exit(1);
   }
 }
-
 run();

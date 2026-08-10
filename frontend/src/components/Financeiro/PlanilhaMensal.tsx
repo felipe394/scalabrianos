@@ -99,6 +99,11 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
   const { user, isAdminGeral } = useAuth();
   const blacklist = ['Congregação', 'Saúde/Medicamentos', 'Transporte', 'Vestuário', 'Água', 'Supermercado', 'Aluguel', 'Energia Elétrica', 'Internet'];
   const [selectedMes, setSelectedMes] = useState(externalMes || new Date().toISOString().slice(0, 7));
+  useEffect(() => {
+    if (externalMes) {
+      setSelectedMes(externalMes);
+    }
+  }, [externalMes]);
   const [selectedCasa, setSelectedCasa] = useState('');
   const [planilha, setPlanilha] = useState<PlanilhaData | null>(null);
   const [, setIsLoading] = useState(false);
@@ -176,10 +181,15 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
     syncEditValuesFromLogs(updatedLogs);
   };
 
-  const canValidate = user?.role === 'ADMIN_GERAL' || user?.is_oconomo;
-  const isSuperior = user?.role === 'ADMIN_GERAL' || user?.is_superior;
+  const rawIsOconomo = !!user?.is_oconomo;
+  const isOconomoUser = rawIsOconomo || user?.role === 'ECONOMO_LOCAL' || user?.role === 'ECONOMO_REGIONAL';
+  const rawIsSuperior = !!user?.is_superior;
+  const isSuperiorUser = rawIsSuperior || user?.role === 'SUPERIOR_LOCAL' || user?.role === 'SUPERIOR_REGIONAL';
 
-  const isOwner = !externalUsuarioId || externalUsuarioId === user?.id;
+  const canValidate = user?.role === 'ADMIN_GERAL' || isOconomoUser || isSuperiorUser;
+  const isSuperior = user?.role === 'ADMIN_GERAL' || isSuperiorUser;
+
+  const isOwner = !externalUsuarioId;
   const isLocked = isOwner 
     ? (planilha?.status === 'EM_VALIDACAO' || planilha?.status === 'VALIDADO')
     : (planilha?.status !== 'EM_VALIDACAO');
@@ -210,19 +220,19 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
         setPlanilha(res.data);
         const vals: Record<number, number> = {};
         const logs: EntryLog[] = [];
-        res.data.itens.forEach((it: any) => {
+        res.data.itens.forEach((it: any, idx: number) => {
           const val = parseFloat(it.valor);
           if (val > 0) {
-            vals[it.categoria_id] = val;
+            vals[it.categoria_id] = (vals[it.categoria_id] || 0) + val;
             const cat = categorias.find(c => c.id === it.categoria_id);
             if (cat) {
               logs.push({
-                id: `db-${it.categoria_id}`,
+                id: it.id ? `db-${it.id}` : `db-${it.categoria_id}-${idx}`,
                 tipo: cat.tipo,
                 categoriaId: cat.id,
                 categoriaNome: cat.nome,
                 valor: val,
-                obs: '',
+                obs: it.observacao || '',
                 timestamp: new Date(res.data.updated_at || res.data.created_at || Date.now())
               });
             }
@@ -292,6 +302,10 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
   };
 
   const handleSave = async () => {
+    if (!selectedMes) {
+      alert('Por favor, selecione o Mês/Ano de referência antes de salvar.');
+      return;
+    }
     if (!user || !selectedCasa) {
       alert('Selecione uma casa religiosa.');
       return;
@@ -320,7 +334,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
 
     const totals = calculateTotals();
     const payload = {
-      usuario_id: user.id,
+      usuario_id: externalUsuarioId || user.id,
       casa_id: parseInt(selectedCasa),
       mes_referencia: selectedMes,
       total_credito: totals.credito,
@@ -330,9 +344,10 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
       obs_despesa: obsDespesa,
       anexo_path: finalAnexoPath,
       status: 'PENDENTE',
-      itens: Object.entries(editValues).map(([id, val]) => ({
-        categoria_id: parseInt(id),
-        valor: val
+      itens: entryLogs.map(log => ({
+        categoria_id: log.categoriaId,
+        valor: log.valor,
+        observacao: log.obs
       }))
     };
 
@@ -348,6 +363,10 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
   };
 
   const handleFinalize = async () => {
+    if (!selectedMes) {
+      alert('Por favor, selecione o Mês/Ano de referência antes de enviar.');
+      return;
+    }
     if (!user || !selectedCasa) {
       alert('Selecione uma casa religiosa.');
       return;
@@ -364,7 +383,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
     setIsSaving(true);
     const totals = calculateTotals();
     const payload = {
-      usuario_id: user.id,
+      usuario_id: externalUsuarioId || user.id,
       casa_id: parseInt(selectedCasa),
       mes_referencia: selectedMes,
       total_credito: totals.credito,
@@ -374,9 +393,10 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
       obs_despesa: obsDespesa,
       anexo_path: anexoUrl,
       status: isSuperiorSelf ? 'VALIDADO' : 'EM_VALIDACAO',
-      itens: Object.entries(editValues).map(([id, val]) => ({
-        categoria_id: parseInt(id),
-        valor: val
+      itens: entryLogs.map(log => ({
+        categoria_id: log.categoriaId,
+        valor: log.valor,
+        observacao: log.obs
       }))
     };
 
@@ -516,16 +536,18 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
       <div className="filters-card" style={{ marginBottom: '20px', display: 'block' }}>
         <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           <div className="filter-item">
-            <label><Calendar size={14} /> {t('financeiro.filters.start_date')}</label>
+            <label><Calendar size={14} /> {t('planilha.month_year', 'Mês/Ano')}</label>
             <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
           </div>
-          <div className="filter-item">
-            <label>{t('planilha.community', 'Casa Religiosa')}</label>
-            <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)} disabled={!isAdminGeral || !!planilha || !!externalUsuarioId}>
-              <option value="">{t('planilha.select_house')}</option>
-              {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-          </div>
+          {(isAdminGeral || user?.is_oconomo || user?.is_superior) && (
+            <div className="filter-item">
+              <label>{t('planilha.community', 'Casa Religiosa')}</label>
+              <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)} disabled={!isAdminGeral || !!planilha || !!externalUsuarioId}>
+                <option value="">{t('planilha.select_house')}</option>
+                {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+          )}
           {isAdminGeral && (
             <div className="filter-item">
               <label>{t('planilha.actions', 'Ações')}</label>
@@ -692,7 +714,8 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
             </div>
 
             {/* INSERTION FORM AREA */}
-            <div className="insertion-fields-card" style={{ marginBottom: '20px', padding: '24px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+            {isOwner && !isLocked && (
+              <div className="insertion-fields-card" style={{ marginBottom: '20px', padding: '24px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
                 {/* RECEITA COL */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -779,6 +802,23 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
                 </div>
               </div>
             </div>
+            )}
+
+            {!isOwner && planilha && (planilha.obs_receita || planilha.obs_despesa) && (
+              <div className="observations-display-card" style={{ marginBottom: '20px', padding: '18px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#013375', fontSize: '15px', fontWeight: 800 }}>Observações do Missionário</h4>
+                {planilha.obs_receita && (
+                  <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#334155' }}>
+                    <strong>Receitas:</strong> {planilha.obs_receita}
+                  </p>
+                )}
+                {planilha.obs_despesa && (
+                  <p style={{ margin: 0, fontSize: '13px', color: '#334155' }}>
+                    <strong>Despesas:</strong> {planilha.obs_despesa}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* TABELA DE VISUALIZAÇÃO DOS VALORES (CINZA & BLOQUEADA) */}
             <div className="spreadsheet-grid" style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
@@ -868,7 +908,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
                       value={numMissas}
                       onChange={e => setNumMissas(parseInt(e.target.value) || 0)}
                       style={{ width: '70px', padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 800, background: '#fff' }}
-                      disabled={isLocked}
+                      disabled={planilha?.status === 'VALIDADO'}
                     />
                   </div>
                 </div>
@@ -911,7 +951,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
               </div>
             </div>
 
-            {(canValidate || isSuperior) && viewMode === 'individual' && planilha && !isOwner && planilha.status !== 'VALIDADO' && (
+            {(canValidate || isSuperior) && viewMode === 'individual' && planilha && (!isOwner || (isOwner && (isOconomoUser || isSuperiorUser || user?.role === 'ADMIN_GERAL') && planilha.status === 'EM_VALIDACAO')) && planilha.status !== 'VALIDADO' && (
               <div className="management-controls card-lite" style={{ marginTop: '30px', borderTop: '4px solid #013375' }}>
                 <h3 style={{ marginBottom: '15px' }}>Revisão de Planilha: {selectedUserName || user?.nome}</h3>
                 <div className="comment-box" style={{ marginBottom: '20px' }}>
@@ -1033,7 +1073,7 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
                         <th style={{ padding: '10px 14px', textAlign: 'left', color: '#c7d2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Observação</th>
                         <th style={{ padding: '10px 14px', textAlign: 'center', color: '#c7d2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Data / Hora</th>
                         <th style={{ padding: '10px 14px', textAlign: 'right', color: '#c7d2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Valor (R$)</th>
-                        <th style={{ padding: '10px 10px', textAlign: 'center', color: '#c7d2fe', fontWeight: 700, fontSize: '10px' }}>Ação</th>
+                        {!isLocked && <th style={{ padding: '10px 10px', textAlign: 'center', color: '#c7d2fe', fontWeight: 700, fontSize: '10px' }}>Ação</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1064,13 +1104,15 @@ const PlanilhaMensal: React.FC<Props> = ({ casas, categorias, externalUsuarioId,
                           <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, fontSize: '13px', color: entry.tipo === 'CREDITO' ? '#065f46' : '#991b1b' }}>
                             {entry.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </td>
-                          <td style={{ padding: '10px 10px', textAlign: 'center' }}>
-                            <button
-                              title="Excluir lançamento"
-                              onClick={() => handleRemoveItem(entry.id)}
-                              style={{ background: '#fee2e2', border: 'none', cursor: 'pointer', color: '#ef4444', fontWeight: 700, fontSize: '13px', lineHeight: 1, padding: '4px 8px', borderRadius: '6px', transition: 'all 0.2s' }}
-                            >✕</button>
-                          </td>
+                          {!isLocked && (
+                            <td style={{ padding: '10px 10px', textAlign: 'center' }}>
+                              <button
+                                title="Excluir lançamento"
+                                onClick={() => handleRemoveItem(entry.id)}
+                                style={{ background: '#fee2e2', border: 'none', cursor: 'pointer', color: '#ef4444', fontWeight: 700, fontSize: '13px', lineHeight: 1, padding: '4px 8px', borderRadius: '6px', transition: 'all 0.2s' }}
+                              >✕</button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

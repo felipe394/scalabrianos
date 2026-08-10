@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 import PlanilhaMensal from '../components/Financeiro/PlanilhaMensal';
 import PlanilhaComunidade from '../components/Financeiro/PlanilhaComunidade';
@@ -28,6 +29,10 @@ interface Casa {
 const Financeiro: React.FC = () => {
   const { t } = useTranslation();
   const { isAdminGeral, isOconomo, isSuperior, isPadre, user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const queryMes = searchParams.get('mes') || undefined;
+  const queryTab = searchParams.get('tab') || undefined;
+
   const [casas, setCasas] = useState<Casa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
@@ -40,9 +45,17 @@ const Financeiro: React.FC = () => {
 
   // Default tab: individual users land on their own spreadsheet;
   // admins (ADMIN_GERAL) go straight to the community/admin tab.
-  const [activeTab, setActiveTab] = useState<'individual' | 'comunidade' | 'planejamento' | 'anual' | 'validacoes_pendentes' | 'historico_aprovacoes'>(
+  const [activeTab, setActiveTab] = useState<'individual' | 'comunidade' | 'planejamento' | 'anual' | 'validacoes_pendentes' | 'historico_aprovacoes' | 'historico_casa'>(
     isAdminGeral ? 'comunidade' : 'individual'
   );
+
+  useEffect(() => {
+    if (queryTab) {
+      setActiveTab(queryTab as any);
+    } else if (queryMes) {
+      setActiveTab('individual');
+    }
+  }, [queryTab, queryMes]);
 
   useEffect(() => {
     // Common missionaries (no authority role) are forced to individual
@@ -109,8 +122,16 @@ const Financeiro: React.FC = () => {
                   className={`mode-btn ${activeTab === 'historico_aprovacoes' ? 'active' : ''}`}
                   onClick={() => setActiveTab('historico_aprovacoes')}
                 >
-                  Histórico de Aprovações
+                  Histórico Missionários
                 </button>
+                {(user?.role === 'ECONOMO_REGIONAL' || user?.role === 'ADMIN_GERAL') && (
+                  <button
+                    className={`mode-btn ${activeTab === 'historico_casa' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('historico_casa')}
+                  >
+                    Histórico Casa Religiosa
+                  </button>
+                )}
               </>
             )}
             {isAdminGeral && (
@@ -166,12 +187,13 @@ const Financeiro: React.FC = () => {
 
       {/* Tab content */}
       <div className="tab-content" style={{ marginTop: '16px' }}>
-        {activeTab === 'individual' && !isAdminGeral && <PlanilhaMensal casas={casas} categorias={categorias} />}
+        {activeTab === 'individual' && !isAdminGeral && <PlanilhaMensal casas={casas} categorias={categorias} externalMes={queryMes} />}
         {activeTab === 'comunidade' && (isAdminGeral || isLocalAuthority) && <PlanilhaComunidade casas={casas} categorias={categorias} />}
         {activeTab === 'planejamento' && isAdminGeral && <PlanejamentoOrcamentario casas={casas} categorias={categorias.filter(c => c.perfil === 'PLANEJAMENTO')} />}
         {activeTab === 'anual' && isAdminGeral && <PrestacaoContasAnual casas={casas} categorias={categorias.filter(c => c.perfil === 'ANUAL')} />}
         {activeTab === 'validacoes_pendentes' && isOconomo && <ValidacoesOconomo casas={casas} categorias={categorias} tipo="pendentes" />}
-        {activeTab === 'historico_aprovacoes' && isOconomo && <ValidacoesOconomo casas={casas} categorias={categorias} tipo="historico" />}
+        {activeTab === 'historico_aprovacoes' && isOconomo && <ValidacoesOconomo casas={casas} categorias={categorias} tipo="historico_missionario" />}
+        {activeTab === 'historico_casa' && isOconomo && (user?.role === 'ECONOMO_REGIONAL' || user?.role === 'ADMIN_GERAL') && <ValidacoesOconomo casas={casas} categorias={categorias} tipo="historico_casa" />}
       </div>
     </div>
   );

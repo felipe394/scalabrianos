@@ -281,7 +281,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.login, role: user.role },
+      { id: user.id, email: user.login, role: user.role, nome: user.nome },
       JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -1864,7 +1864,7 @@ app.get('/api/financas-mensais/pendentes/casa/:casa_id', authenticateToken, asyn
       SELECT p.id, p.usuario_id, u.nome as nome_missionario, p.mes_referencia, p.status, p.updated_at
       FROM tb_financas_mensais p
       JOIN tb_usuarios u ON p.usuario_id = u.id
-      WHERE p.casa_id = ? AND p.status = 'PENDENTE'
+      WHERE p.casa_id = ? AND p.status IN ('PENDENTE', 'EM_VALIDACAO')
       ORDER BY p.updated_at DESC
     `, [casa_id]);
     res.json(rows);
@@ -1890,7 +1890,7 @@ app.get('/api/financas-mensais/historico/casa/:casa_id', authenticateToken, asyn
 });
 
 app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
-  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa } = req.body;
+  const { usuario_id, casa_id, mes_referencia, itens, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa, status } = req.body;
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -1905,15 +1905,15 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
       }
       planilhaId = existing[0].id;
       await connection.query(
-        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, num_missas_superior = ?, anexo_path = ?, obs_receita = ?, obs_despesa = ?, status = "PENDENTE", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null, planilhaId]
+        'UPDATE tb_financas_mensais SET total_credito = ?, total_debito = ?, num_missas_superior = ?, anexo_path = ?, obs_receita = ?, obs_despesa = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null, status || 'PENDENTE', planilhaId]
       );
       // Clean old items
       await connection.query('DELETE FROM tb_financas_mensais_itens WHERE planilha_id = ?', [planilhaId]);
     } else {
       const [result] = await connection.query(
-        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null]
+        'INSERT INTO tb_financas_mensais (usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, obs_receita, obs_despesa, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [usuario_id, casa_id, mes_referencia, total_credito, total_debito, num_missas_superior || 0, anexo_path || null, obs_receita || null, obs_despesa || null, status || 'PENDENTE']
       );
       planilhaId = result.insertId;
     }
@@ -1922,8 +1922,8 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
     for (const item of itens) {
       if (item.valor > 0) {
         await connection.query(
-          'INSERT INTO tb_financas_mensais_itens (planilha_id, categoria_id, valor) VALUES (?, ?, ?)',
-          [planilhaId, item.categoria_id, item.valor]
+          'INSERT INTO tb_financas_mensais_itens (planilha_id, categoria_id, valor, observacao) VALUES (?, ?, ?, ?)',
+          [planilhaId, item.categoria_id, item.valor, item.observacao || null]
         );
       }
     }
@@ -1950,7 +1950,7 @@ app.post('/api/financas-mensais', authenticateToken, async (req, res) => {
       for (const oc of oconomos) {
         await connection.query(
           'INSERT INTO tb_notificacoes (usuario_id, mensagem, tipo, link_path) VALUES (?, ?, ?, ?)',
-          [oc.id, `${missNome} acabou de finalizar e enviou sua planilha de ${mes_referencia} para que você valide e faça suas considerações!`, 'SISTEMA', '/financeiro']
+          [oc.id, `${missNome} acabou de finalizar e enviou sua planilha de ${mes_referencia} para que você valide e faça suas considerações!`, 'SISTEMA', '/financeiro?tab=validacoes_pendentes']
         );
       }
     }
@@ -1981,8 +1981,9 @@ app.get('/api/financas-mensais/consolidado/casa/:casa_id/mes/:mes', authenticate
 
 app.get('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken, async (req, res) => {
   const { casa_id, mes } = req.params;
+  const targetUid = req.query.usuario_id || req.user.id;
   try {
-    const [rows] = await db.query('SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?', [casa_id, mes]);
+    const [rows] = await db.query('SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?', [casa_id, mes, targetUid]);
     if (rows.length === 0) {
        // Return a default object if it doesn't exist
        return res.json({ status: 'PENDENTE_ECONOMO', casa_id, mes_referencia: mes });
@@ -1995,20 +1996,52 @@ app.get('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken
 
 app.put('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken, async (req, res) => {
   const { casa_id, mes } = req.params;
-  const { status, apontamentos_economo, apontamentos_superior } = req.body;
+  const { status, apontamentos_economo, apontamentos_superior, usuario_id } = req.body;
+  const targetUid = usuario_id || req.user.id;
   try {
-    const [existing] = await db.query('SELECT id FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?', [casa_id, mes]);
+    const [existing] = await db.query('SELECT id FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?', [casa_id, mes, targetUid]);
     if (existing.length > 0) {
        await db.query(
-         'UPDATE tb_financas_consolidado SET status = ?, apontamentos_economo = IFNULL(?, apontamentos_economo), apontamentos_superior = IFNULL(?, apontamentos_superior) WHERE id = ?',
-         [status, apontamentos_economo, apontamentos_superior, existing[0].id]
+         'UPDATE tb_financas_consolidado SET status = ?, apontamentos_economo = IFNULL(?, apontamentos_economo), apontamentos_superior = IFNULL(?, apontamentos_superior), validado_por = ? WHERE id = ?',
+         [status, apontamentos_economo, apontamentos_superior, req.user.id, existing[0].id]
        );
     } else {
        await db.query(
-         'INSERT INTO tb_financas_consolidado (casa_id, mes_referencia, status, apontamentos_economo, apontamentos_superior) VALUES (?, ?, ?, ?, ?)',
-         [casa_id, mes, status, apontamentos_economo, apontamentos_superior]
+         'INSERT INTO tb_financas_consolidado (casa_id, mes_referencia, status, apontamentos_economo, apontamentos_superior, validado_por, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+         [casa_id, mes, status, apontamentos_economo, apontamentos_superior, req.user.id, targetUid]
        );
     }
+
+    // Handle Notifications for Community Spreadsheet
+    if (status === 'APROVADO' || status === 'DEVOLVIDO_SUPERIOR') {
+      const [casaRows] = await db.query('SELECT nome FROM tb_casas_religiosas WHERE id = ?', [casa_id]);
+      const casaNome = casaRows[0]?.nome || '';
+      
+      const [valRows] = await db.query('SELECT nome FROM tb_usuarios WHERE id = ?', [req.user.id]);
+      const valNome = valRows[0]?.nome || 'Desconhecido';
+      
+      const [economos] = await db.query(`
+        SELECT u.id FROM tb_usuarios u
+        JOIN tb_missionario_casas mc ON u.id = mc.usuario_id
+        WHERE mc.casa_id = ? AND u.is_oconomo = 1 AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
+      `, [casa_id]);
+      
+      for (const eco of economos) {
+        let msg = '';
+        if (status === 'APROVADO') {
+          msg = `A prestação de contas da casa religiosa (${casaNome}) de ${mes} foi aprovada por ${valNome}.`;
+        } else {
+          msg = `A prestação de contas da casa religiosa (${casaNome}) de ${mes} foi devolvida por ${valNome}. Motivo: ${apontamentos_economo || apontamentos_superior || 'Não especificado'}`;
+        }
+        await createNotification(
+          eco.id,
+          msg,
+          status === 'APROVADO' ? 'INFO' : 'ALERTA',
+          `/financeiro?mes=${mes}&tab=comunidade`
+        );
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -2019,18 +2052,73 @@ app.put('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken
 app.get('/api/financas-comunidade/:casa_id/:mes', authenticateToken, async (req, res) => {
   const { casa_id, mes } = req.params;
   try {
+    // 1. Get validated missionary items for this house and month
+    const [missionaryItens] = await db.query(`
+      SELECT it.categoria_id, it.valor, cat.codigo, cat.tipo
+      FROM tb_financas_mensais_itens it
+      JOIN tb_financas_mensais p ON it.planilha_id = p.id
+      JOIN tb_categorias_financas cat ON it.categoria_id = cat.id
+      WHERE p.casa_id = ? AND p.mes_referencia = ? AND p.status = 'VALIDADO'
+    `, [casa_id, mes]);
+
+    // 2. Fetch all categories of PERFIL_2
+    const [perfil2Cats] = await db.query(`
+      SELECT id, codigo, tipo FROM tb_categorias_financas WHERE perfil = 'PERFIL_2'
+    `);
+
+    // Helper to normalize codes for safe matching (e.g. 42.02 and 42.2)
+    const normalizeCode = (code) => {
+      if (!code) return '';
+      return code.split('.')
+                 .map(part => {
+                   const num = parseInt(part, 10);
+                   return isNaN(num) ? part : num.toString();
+                 })
+                 .join('.');
+    };
+
+    // 3. Map missionary items (PERFIL_1) to community categories (PERFIL_2) by matching code and type
+    const missionarySums = {};
+    perfil2Cats.forEach(cat => {
+      missionarySums[cat.id] = 0;
+    });
+
+    missionaryItens.forEach(it => {
+      const normItCode = normalizeCode(it.codigo);
+      const p2cat = perfil2Cats.find(c => normalizeCode(c.codigo) === normItCode && c.tipo === it.tipo);
+      if (p2cat) {
+        missionarySums[p2cat.id] += parseFloat(it.valor);
+      }
+    });
+
+    // 4. Fetch consolidated house data
+    const targetUid = req.query.usuario_id || req.user.id;
     const [rows] = await db.query(
-      'SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?',
-      [casa_id, mes]
+      'SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?',
+      [casa_id, mes, targetUid]
     );
-    if (rows.length === 0) return res.json(null);
+
+    if (rows.length === 0) {
+      return res.json({
+        id: null,
+        casa_id: parseInt(casa_id),
+        mes_referencia: mes,
+        status: 'PENDENTE_ECONOMO',
+        total_credito: 0,
+        total_debito: 0,
+        num_missas_superior: 0,
+        anexo_path: null,
+        itens: [],
+        missionarySums
+      });
+    }
 
     const [itens] = await db.query(
       'SELECT * FROM tb_financas_consolidado_itens WHERE consolidado_id = ?',
       [rows[0].id]
     );
 
-    res.json({ ...rows[0], itens });
+    res.json({ ...rows[0], itens, missionarySums });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -2044,8 +2132,8 @@ app.post('/api/financas-comunidade', authenticateToken, async (req, res) => {
 
     // Check if it exists
     const [existing] = await connection.query(
-      'SELECT id, status FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?',
-      [casa_id, mes_referencia]
+      'SELECT id, status FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?',
+      [casa_id, mes_referencia, req.user.id]
     );
 
     let consolidadoId;
@@ -2061,8 +2149,8 @@ app.post('/api/financas-comunidade', authenticateToken, async (req, res) => {
     } else {
       // Insert new
       const [result] = await connection.query(
-        'INSERT INTO tb_financas_consolidado (casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, status || 'PENDENTE_ECONOMO']
+        'INSERT INTO tb_financas_consolidado (casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, status, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [casa_id, mes_referencia, total_credito, total_debito, num_missas_superior, anexo_path, status || 'PENDENTE_ECONOMO', req.user.id]
       );
       consolidadoId = result.insertId;
     }
@@ -2071,13 +2159,38 @@ app.post('/api/financas-comunidade', authenticateToken, async (req, res) => {
     for (const item of itens) {
       if (item.valor > 0) {
         await connection.query(
-          'INSERT INTO tb_financas_consolidado_itens (consolidado_id, categoria_id, valor) VALUES (?, ?, ?)',
-          [consolidadoId, item.categoria_id, item.valor]
+          'INSERT INTO tb_financas_consolidado_itens (consolidado_id, categoria_id, valor, observacao) VALUES (?, ?, ?, ?)',
+          [consolidadoId, item.categoria_id, item.valor, item.observacao || null]
         );
       }
     }
 
     await connection.commit();
+
+    // Notify Regional Economists if ENVIADO_REGIONAL
+    if (status === 'ENVIADO_REGIONAL') {
+      try {
+        const [casaRows] = await db.query('SELECT nome FROM tb_casas_religiosas WHERE id = ?', [casa_id]);
+        const casaNome = casaRows[0]?.nome || '';
+        
+        const [userRows] = await db.query('SELECT nome FROM tb_usuarios WHERE id = ?', [req.user.id]);
+        const userNome = userRows[0]?.nome || 'Desconhecido';
+        
+        const [regRows] = await db.query("SELECT id FROM tb_usuarios WHERE role = 'ECONOMO_REGIONAL' AND status = 'ATIVO'");
+        
+        for (const reg of regRows) {
+          await createNotification(
+            reg.id,
+            `O ecônomo local ${userNome} enviou a prestação de contas da casa religiosa (${casaNome}) de ${mes_referencia} para validação.`,
+            'INFO',
+            `/financeiro?mes=${mes_referencia}&tab=validacoes_pendentes`
+          );
+        }
+      } catch (err) {
+        console.error('Error sending regional notifications:', err);
+      }
+    }
+
     res.json({ success: true, id: consolidadoId });
   } catch (error) {
     await connection.rollback();
@@ -2092,10 +2205,10 @@ app.put('/api/financas-mensais/:id/validar', authenticateToken, async (req, res)
   const { id } = req.params;
   const { status, apontamentos } = req.body;
   try {
-    // 1. Update status
+    // 1. Update status and validador
     await db.query(
-      'UPDATE tb_financas_mensais SET status = ?, apontamentos = ? WHERE id = ?',
-      [status, apontamentos, id]
+      'UPDATE tb_financas_mensais SET status = ?, apontamentos = ?, validado_por = ? WHERE id = ?',
+      [status, apontamentos, req.user.id, id]
     );
 
     // 2. Log Action
@@ -2112,7 +2225,7 @@ app.put('/api/financas-mensais/:id/validar', authenticateToken, async (req, res)
           usuario_id, 
           `Sua planilha de ${mes_referencia} foi devolvida para correções. Motivo: ${apontamentos || 'Não especificado'}`,
           'ALERTA',
-          '/financeiro'
+          `/financeiro?mes=${mes_referencia}`
         );
       }
 
@@ -2521,6 +2634,300 @@ app.post('/api/stats', authenticateToken, async (req, res) => {
         { id: 1, user: 'Admin', activity: 'Sistema pronto', time: 'Agora mesmo' }
       ]
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/financas-comunidade/:id/validar', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { status, apontamentos } = req.body;
+  try {
+    const colApontamentos = req.user.role === 'SUPERIOR_REGIONAL' ? 'apontamentos_superior' : 'apontamentos_economo';
+    
+    await db.query(
+      `UPDATE tb_financas_consolidado SET status = ?, ${colApontamentos} = ?, validado_por = ? WHERE id = ?`,
+      [status, apontamentos, req.user.id, id]
+    );
+
+    await logAction(req.user.id, 'VALIDAR_PLANILHA_COMUNIDADE', 'tb_financas_consolidado', `Planilha consolidada ${id} validada como ${status}`);
+
+    const [sheet] = await db.query('SELECT casa_id, mes_referencia FROM tb_financas_consolidado WHERE id = ?', [id]);
+    if (sheet.length > 0) {
+      const { casa_id, mes_referencia } = sheet[0];
+      const [casaRows] = await db.query('SELECT nome FROM tb_casas_religiosas WHERE id = ?', [casa_id]);
+      const casaNome = casaRows[0]?.nome || '';
+      
+      const [valRows] = await db.query('SELECT nome FROM tb_usuarios WHERE id = ?', [req.user.id]);
+      const valNome = valRows[0]?.nome || 'Desconhecido';
+      
+      const [economos] = await db.query(`
+        SELECT u.id FROM tb_usuarios u
+        JOIN tb_missionario_casas mc ON u.id = mc.usuario_id
+        WHERE mc.casa_id = ? AND u.is_oconomo = 1 AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE())
+      `, [casa_id]);
+      
+      for (const eco of economos) {
+        let msg = '';
+        if (status === 'APROVADO') {
+          msg = `A prestação de contas da casa religiosa (${casaNome}) de ${mes_referencia} foi aprovada por ${valNome}.`;
+        } else {
+          msg = `A prestação de contas da casa religiosa (${casaNome}) de ${mes_referencia} foi devolvida por ${valNome}. Motivo: ${apontamentos || 'Não especificado'}`;
+        }
+        await createNotification(
+          eco.id,
+          msg,
+          status === 'APROVADO' ? 'INFO' : 'ALERTA',
+          `/financeiro?mes=${mes_referencia}&tab=comunidade`
+        );
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
+  try {
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+
+    // Fetch userCasaId if local economist
+    let userCasaId = null;
+    if (isLocalEco) {
+      const [houseRow] = await db.query(
+        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+        [req.user.id]
+      );
+      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+    }
+
+    const items = [];
+
+    // 1. Fetch pending missionary sheets
+    let queryMensal = `
+      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at
+      FROM tb_financas_mensais p
+      JOIN tb_usuarios u ON p.usuario_id = u.id
+      JOIN tb_casas_religiosas c ON p.casa_id = c.id
+      WHERE p.status IN ('PENDENTE', 'EM_VALIDACAO')
+    `;
+    const paramsMensal = [];
+    if (isLocalEco) {
+      queryMensal += " AND p.casa_id = ?";
+      paramsMensal.push(userCasaId);
+    }
+    const [rowsMensal] = await db.query(queryMensal, paramsMensal);
+    rowsMensal.forEach(r => {
+      items.push({
+        id: r.id,
+        tipo_planilha: 'missionario',
+        usuario_id: r.usuario_id,
+        casa_id: r.casa_id,
+        nome_usuario_ou_casa: r.nome_usuario_ou_casa,
+        nome_casa: r.nome_casa,
+        mes_referencia: r.mes_referencia,
+        status: r.status,
+        updated_at: r.updated_at
+      });
+    });
+
+    // 2. Fetch pending community consolidated sheets (only for regional/admin)
+    if (isRegional) {
+      const queryConsolidado = `
+        SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, p.usuario_id
+        FROM tb_financas_consolidado p
+        JOIN tb_usuarios u ON p.usuario_id = u.id
+        JOIN tb_casas_religiosas c ON p.casa_id = c.id
+        WHERE p.status = 'ENVIADO_REGIONAL'
+      `;
+      const [rowsConsolidado] = await db.query(queryConsolidado);
+      rowsConsolidado.forEach(r => {
+        items.push({
+          id: r.id,
+          tipo_planilha: 'comunidade',
+          casa_id: r.casa_id,
+          usuario_id: r.usuario_id,
+          nome_usuario_ou_casa: r.nome_usuario_ou_casa,
+          nome_casa: r.nome_casa,
+          mes_referencia: r.mes_referencia,
+          status: r.status,
+          updated_at: r.updated_at
+        });
+      });
+    }
+
+    items.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, res) => {
+  try {
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+
+    // Fetch userCasaId if local economist
+    let userCasaId = null;
+    if (isLocalEco) {
+      const [houseRow] = await db.query(
+        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+        [req.user.id]
+      );
+      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+    }
+
+    let query = `
+      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador
+      FROM tb_financas_mensais p
+      JOIN tb_usuarios u ON p.usuario_id = u.id
+      JOIN tb_casas_religiosas c ON p.casa_id = c.id
+      LEFT JOIN tb_usuarios v ON p.validado_por = v.id
+      WHERE p.status IN ('VALIDADO', 'DEVOLVIDO')
+    `;
+    const params = [];
+    if (isLocalEco) {
+      query += " AND p.casa_id = ?";
+      params.push(userCasaId);
+    }
+    query += " ORDER BY p.updated_at DESC";
+    const [rows] = await db.query(query, params);
+    const items = rows.map(r => ({
+      id: r.id,
+      tipo_planilha: 'missionario',
+      usuario_id: r.usuario_id,
+      casa_id: r.casa_id,
+      nome_usuario_ou_casa: r.nome_usuario_ou_casa,
+      nome_casa: r.nome_casa,
+      mes_referencia: r.mes_referencia,
+      status: r.status,
+      updated_at: r.updated_at,
+      nome_validador: r.nome_validador || 'N/A'
+    }));
+
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) => {
+  try {
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+
+    // Fetch userCasaId if local economist
+    let userCasaId = null;
+    if (isLocalEco) {
+      const [houseRow] = await db.query(
+        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+        [req.user.id]
+      );
+      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+    }
+
+    let query = `
+      SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador, p.usuario_id
+      FROM tb_financas_consolidado p
+      JOIN tb_usuarios u ON p.usuario_id = u.id
+      JOIN tb_casas_religiosas c ON p.casa_id = c.id
+      LEFT JOIN tb_usuarios v ON p.validado_por = v.id
+      WHERE p.status IN ('APROVADO', 'DEVOLVIDO_SUPERIOR')
+    `;
+    const params = [];
+    if (isLocalEco) {
+      query += " AND p.casa_id = ?";
+      params.push(userCasaId);
+    }
+    query += " ORDER BY p.updated_at DESC";
+    const [rows] = await db.query(query, params);
+    const items = rows.map(r => ({
+      id: r.id,
+      tipo_planilha: 'comunidade',
+      casa_id: r.casa_id,
+      usuario_id: r.usuario_id,
+      nome_usuario_ou_casa: r.nome_usuario_ou_casa,
+      nome_casa: r.nome_casa,
+      mes_referencia: r.mes_referencia,
+      status: r.status === 'DEVOLVIDO_SUPERIOR' ? 'DEVOLVIDO' : r.status,
+      updated_at: r.updated_at,
+      nome_validador: r.nome_validador || 'N/A'
+    }));
+
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
+  try {
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+
+    // Fetch userCasaId if local economist
+    let userCasaId = null;
+    if (isLocalEco) {
+      const [houseRow] = await db.query(
+        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+        [req.user.id]
+      );
+      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+    }
+
+    let query = `
+      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_missionario, p.mes_referencia, p.total_credito, p.total_debito, (p.total_credito - p.total_debito) as saldo, p.updated_at as data_validacao, c.nome as nome_casa
+      FROM tb_financas_mensais p
+      JOIN tb_usuarios u ON p.usuario_id = u.id
+      JOIN tb_casas_religiosas c ON p.casa_id = c.id
+      WHERE p.status = 'VALIDADO'
+    `;
+    const params = [];
+    if (isLocalEco) {
+      query += " AND p.casa_id = ?";
+      params.push(userCasaId);
+    }
+    query += " ORDER BY p.mes_referencia DESC, p.updated_at DESC";
+    const [rows] = await db.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/extratos/casas', authenticateToken, async (req, res) => {
+  try {
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+
+    // Fetch userCasaId if local economist
+    let userCasaId = null;
+    if (isLocalEco) {
+      const [houseRow] = await db.query(
+        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+        [req.user.id]
+      );
+      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
+    }
+
+    let query = `
+      SELECT p.id, p.casa_id, c.nome as nome_casa, p.mes_referencia, p.total_credito, p.total_debito, (p.total_credito - p.total_debito) as saldo, p.updated_at as data_validacao, p.usuario_id
+      FROM tb_financas_consolidado p
+      JOIN tb_casas_religiosas c ON p.casa_id = c.id
+      WHERE p.status = 'APROVADO'
+    `;
+    const params = [];
+    if (isLocalEco) {
+      query += " AND p.casa_id = ?";
+      params.push(userCasaId);
+    }
+    query += " ORDER BY p.mes_referencia DESC, p.updated_at DESC";
+    const [rows] = await db.query(query, params);
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

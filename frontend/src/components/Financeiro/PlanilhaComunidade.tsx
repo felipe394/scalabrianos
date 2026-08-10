@@ -24,6 +24,7 @@ interface Item {
 interface EntryLog {
   id: string;
   tipo: 'CREDITO' | 'DEBITO';
+  categoriaId: number;
   categoriaNome: string;
   valor: number;
   obs: string;
@@ -65,13 +66,17 @@ interface PlanilhaData {
 interface Props {
   casas: { id: number; nome: string }[];
   categorias: Categoria[];
+  initialCasa?: string;
+  initialMes?: string;
+  externalUsuarioId?: number;
+  onValidationComplete?: () => void;
 }
 
-const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
+const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias, initialCasa, initialMes, externalUsuarioId, onValidationComplete }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [selectedMes, setSelectedMes] = useState(new Date().toISOString().slice(0, 7));
-  const [selectedCasa, setSelectedCasa] = useState('');
+  const [selectedMes, setSelectedMes] = useState(initialMes || new Date().toISOString().slice(0, 7));
+  const [selectedCasa, setSelectedCasa] = useState(initialCasa || '');
   const [planilha, setPlanilha] = useState<PlanilhaData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +85,8 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
   const [anexoFile, setAnexoFile] = useState<File | null>(null);
   const [anexoUrl, setAnexoUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [missionarySums, setMissionarySums] = useState<Record<number, number>>({});
+  const [apontamentos, setApontamentos] = useState('');
 
   // Insertion form state
   const [tempReceitaCat, setTempReceitaCat] = useState('');
@@ -102,24 +109,61 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
     }
   }, [selectedCasa, selectedMes]);
 
+  const isLocked = planilha?.status === 'APROVADO' || planilha?.status === 'ENVIADO_REGIONAL';
+
+  const syncEditValuesFromLogs = (logs: EntryLog[]) => {
+    const newVals: Record<number, number> = {};
+    logs.forEach(log => {
+      if (log.categoriaId) {
+        newVals[log.categoriaId] = (newVals[log.categoriaId] || 0) + log.valor;
+      }
+    });
+    setEditValues(newVals);
+  };
+
   const loadPlanilha = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get(`/financas-comunidade/${selectedCasa}/${selectedMes}`);
+      const url = initialCasa && externalUsuarioId
+        ? `/financas-comunidade/${selectedCasa}/${selectedMes}?usuario_id=${externalUsuarioId}`
+        : `/financas-comunidade/${selectedCasa}/${selectedMes}`;
+      const res = await api.get(url);
       if (res.data) {
         setPlanilha(res.data);
         const vals: Record<number, number> = {};
-        res.data.itens.forEach((it: any) => {
-          vals[it.categoria_id] = parseFloat(it.valor);
+        const logs: EntryLog[] = [];
+        res.data.itens.forEach((it: any, idx: number) => {
+          const val = parseFloat(it.valor);
+          if (val > 0) {
+            vals[it.categoria_id] = (vals[it.categoria_id] || 0) + val;
+            const cat = categorias.find(c => c.id === it.categoria_id);
+            if (cat) {
+              logs.push({
+                id: it.id ? `db-${it.id}` : `db-${it.categoria_id}-${idx}`,
+                tipo: cat.tipo,
+                categoriaId: cat.id,
+                categoriaNome: cat.nome,
+                valor: val,
+                obs: it.observacao || '',
+                timestamp: new Date(res.data.updated_at || res.data.created_at || Date.now())
+              });
+            }
+          }
         });
         setEditValues(vals);
+        setEntryLogs(logs);
         setNumMissas(res.data.num_missas_superior || 0);
         setAnexoUrl(res.data.anexo_path || null);
+        setMissionarySums(res.data.missionarySums || {});
+        setApontamentos(res.data.apontamentos_economo || res.data.apontamentos_superior || '');
       } else {
         setPlanilha(null);
         setEditValues({});
+        setEntryLogs([]);
         setNumMissas(0);
         setAnexoUrl(null);
+        setMissionarySums({});
+        setApontamentos('');
       }
     } catch (err) {
       console.error(err);
@@ -128,11 +172,31 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
     }
   };
 
+  const handleValidateCommunity = async (newStatus: 'APROVADO' | 'DEVOLVIDO_SUPERIOR') => {
+    if (!planilha?.id) return;
+    try {
+      await api.put(`/financas-comunidade/${planilha.id}/validar`, {
+        status: newStatus,
+        apontamentos: apontamentos
+      });
+      alert(newStatus === 'APROVADO' ? 'Prestação de contas aprovada com sucesso!' : 'Prestação de contas devolvida para ajustes!');
+      if (onValidationComplete) {
+        onValidationComplete();
+      } else {
+        loadPlanilha();
+      }
+    } catch (err: any) {
+      alert('Erro ao processar validação: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   const calculateTotals = () => {
     let cre = 0;
     let deb = 0;
     categorias.filter(c => c.perfil === 'PERFIL_2').forEach(cat => {
-      const val = editValues[cat.id] || 0;
+      const houseVal = editValues[cat.id] || 0;
+      const missVal = missionarySums[cat.id] || 0;
+      const val = houseVal + missVal;
       if (cat.tipo === 'CREDITO') cre += val;
       else deb += val;
     });
@@ -148,26 +212,45 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
     if (isNaN(num) || num <= 0) { alert('Informe um valor válido.'); return; }
 
     const id = parseInt(catId);
-    const currentVal = editValues[id] || 0;
-    setEditValues({
-      ...editValues,
-      [id]: currentVal + num
-    });
+    const catObj = categorias.find(c => c.id === id);
 
-    const catNome = categorias.find(c => c.id === id)?.nome || '';
     const obs = tipo === 'CREDITO' ? obsReceita : obsDespesa;
-    setEntryLogs(prev => [{ id: `${Date.now()}-${id}`, tipo, categoriaNome: catNome, valor: num, obs, timestamp: new Date() }, ...prev]);
+    const newEntry: EntryLog = {
+      id: `${Date.now()}-${id}-${Math.random()}`,
+      tipo,
+      categoriaId: id,
+      categoriaNome: catObj?.nome || '',
+      valor: num,
+      obs,
+      timestamp: new Date()
+    };
+
+    const updatedLogs = [newEntry, ...entryLogs];
+    setEntryLogs(updatedLogs);
+    syncEditValuesFromLogs(updatedLogs);
 
     if (tipo === 'CREDITO') {
-       setTempReceitaVal('');
-       setObsReceita('');
+      setTempReceitaCat('');
+      setTempReceitaVal('');
+      setObsReceita('');
     } else {
-       setTempDespesaVal('');
-       setObsDespesa('');
+      setTempDespesaCat('');
+      setTempDespesaVal('');
+      setObsDespesa('');
     }
   };
 
+  const handleRemoveItem = (entryId: string) => {
+    const updatedLogs = entryLogs.filter(e => e.id !== entryId);
+    setEntryLogs(updatedLogs);
+    syncEditValuesFromLogs(updatedLogs);
+  };
+
   const handleSave = async () => {
+    if (!selectedMes) {
+      alert('Por favor, selecione o Mês/Ano de referência antes de salvar.');
+      return;
+    }
     if (!selectedCasa) return alert('Selecione uma casa.');
     setIsSaving(true);
 
@@ -195,16 +278,71 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
       total_debito: totals.debito,
       num_missas_superior: numMissas,
       anexo_path: finalAnexoPath,
-      status: planilha?.status || 'PENDENTE_ECONOMO',
-      itens: Object.entries(editValues).map(([id, val]) => ({
-        categoria_id: parseInt(id),
-        valor: val
+      status: planilha?.status || 'PENDENTE_ECÔNOMO',
+      itens: entryLogs.map(log => ({
+        categoria_id: log.categoriaId,
+        valor: log.valor,
+        observacao: log.obs
       }))
     };
 
     try {
       await api.post('/financas-comunidade', payload);
       alert(t('common.save') + '!');
+      loadPlanilha();
+    } catch (err) {
+      alert(t('common.error'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendToRegional = async () => {
+    if (!selectedMes) {
+      alert('Por favor, selecione o Mês/Ano de referência antes de enviar.');
+      return;
+    }
+    if (!window.confirm('Deseja enviar esta prestação de contas para o Ecônomo Regional? Após o envio, ela não poderá mais ser editada.')) {
+      return;
+    }
+    setIsSaving(true);
+
+    let finalAnexoPath = anexoUrl;
+
+    if (anexoFile) {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('arquivo', anexoFile);
+      formData.append('descricao', `Recibo Casa ${selectedMes}`);
+      try {
+        const upRes = await api.post(`/usuarios/${user?.id}/documentos`, formData);
+        finalAnexoPath = upRes.data.arquivo_path;
+      } catch {
+        alert('Erro no upload do anexo. O envio será realizado sem o anexo.');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    const totals = calculateTotals();
+    const payload = {
+      casa_id: parseInt(selectedCasa),
+      mes_referencia: selectedMes,
+      total_credito: totals.credito,
+      total_debito: totals.debito,
+      num_missas_superior: numMissas,
+      anexo_path: finalAnexoPath,
+      status: 'ENVIADO_REGIONAL',
+      itens: entryLogs.map(log => ({
+        categoria_id: log.categoriaId,
+        valor: log.valor,
+        observacao: log.obs
+      }))
+    };
+
+    try {
+      await api.post('/financas-comunidade', payload);
+      alert('Prestação de contas enviada com sucesso para o Ecônomo Regional!');
       loadPlanilha();
     } catch (err) {
       alert(t('common.error'));
@@ -234,15 +372,15 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
     for (let i = 0; i < maxLength; i++) {
       const rec = receitas[i];
       const dep = despesas[i];
-      
+
       const row = [
         rec ? String(rec.codigo || '') : '',
         rec ? String(rec.nome || '') : '',
-        rec ? (editValues[rec.id] || 0) : '',
+        rec ? ((editValues[rec.id] || 0) + (missionarySums[rec.id] || 0)) : '',
         '',
         dep ? String(dep.codigo || '') : '',
         dep ? String(dep.nome || '') : '',
-        dep ? (editValues[dep.id] || 0) : ''
+        dep ? ((editValues[dep.id] || 0) + (missionarySums[dep.id] || 0)) : ''
       ];
 
       // Add extra rows for totals/missas at the end of despesas column
@@ -264,7 +402,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
     rows.push(['', '', '', '', '', 'SALDO:', totals.saldo]);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    
+
     // Set column widths
     ws['!cols'] = [
       { wch: 10 }, { wch: 30 }, { wch: 15 }, { wch: 5 }, { wch: 10 }, { wch: 30 }, { wch: 15 }
@@ -279,140 +417,146 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
 
   return (
     <div className="planilha-mensal-content">
-      <div className="filters-card">
-        <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-          <div className="filter-item">
-            <label><Calendar size={14} /> {t('planilha.month_year', 'Mês/Ano')}</label>
-            <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
-          </div>
-          <div className="filter-item">
-            <label>{t('planilha.community', 'Comunidade Religiosa')}</label>
-            <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)}>
-              <option value="">{t('planilha.select_house')}</option>
-              {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-          </div>
-          <div className="filter-item">
-             <label>{t('planilha.actions', 'Ações')}</label>
-             <button className="btn-export-small" onClick={exportToExcel} style={{ width: '100%', height: '40px', justifyContent: 'center' }}>
+      {!initialCasa && (
+        <div className="filters-card">
+          <div className="filters-grid-premium" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="filter-item">
+              <label><Calendar size={14} /> {t('planilha.month_year', 'Mês/Ano')}</label>
+              <input type="month" value={selectedMes} onChange={e => setSelectedMes(e.target.value)} />
+            </div>
+            <div className="filter-item">
+              <label>{t('planilha.community', 'Comunidade Religiosa')}</label>
+              <select value={selectedCasa} onChange={e => setSelectedCasa(e.target.value)}>
+                <option value="">{t('planilha.select_house')}</option>
+                {casas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+            <div className="filter-item">
+              <label>{t('planilha.actions', 'Ações')}</label>
+              <button className="btn-export-small" onClick={exportToExcel} style={{ width: '100%', height: '40px', justifyContent: 'center' }}>
                 <Download size={16} /> {t('financeiro.actions.export')}
-             </button>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="spreedsheet-container card-lite" style={{ padding: '30px', marginTop: '20px' }}>
         <div className="spreedsheet-header" style={{ marginBottom: '30px', borderBottom: '2px solid #013375', paddingBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-           <div className="header-info">
-               <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#013375', margin: 0 }}>Prestação de Contas MENSAL - Casa Religiosa</h3>
-               <div style={{ display: 'flex', gap: '30px', marginTop: '10px', fontSize: '0.95rem' }}>
-                 <p style={{ margin: 0, color: '#64748b', fontWeight: 500 }}>Preenchimento pelo ecônomo ou superior local.</p>
-               </div>
-           </div>
-           <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              className="btn-save" 
-              onClick={handleSave} 
-              disabled={isSaving || isUploading}
-              style={{ background: '#013375', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-            >
-              {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-              Salvar Prestação
-            </button>
-           </div>
+          <div className="header-info">
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#013375', margin: 0 }}>Prestação de Contas MENSAL - Casa Religiosa</h3>
+            <div style={{ display: 'flex', gap: '30px', marginTop: '10px', fontSize: '0.95rem', alignItems: 'center' }}>
+              <p style={{ margin: 0, color: '#64748b', fontWeight: 500 }}>Preenchimento pelo ecônomo ou superior local.</p>
+              {planilha && (
+                <span className={`status-tag ${(planilha.status || '').toLowerCase()}`} style={{
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  background: planilha.status === 'ENVIADO_REGIONAL' ? '#dbeafe' : planilha.status === 'APROVADO' ? '#d1fae5' : '#fef3c7',
+                  color: planilha.status === 'ENVIADO_REGIONAL' ? '#1e40af' : planilha.status === 'APROVADO' ? '#065f46' : '#d97706',
+                }}>
+                  {planilha.status === 'ENVIADO_REGIONAL' ? 'Enviado ao Regional' : planilha.status?.replace('_', ' ') || 'PENDENTE ECÔNOMO'}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {isLoading ? (
           <div style={{ padding: '50px', textAlign: 'center' }}><Loader2 className="animate-spin" size={40} /></div>
         ) : (
           <>
-            <div className="insertion-fields-card" style={{ marginBottom: '20px', padding: '24px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
-          {/* RECEITA COL */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <span style={{ fontWeight: 800, color: '#166534', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingUp size={14} /> Receita
-            </span>
-            <select
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#fff', outline: 'none' }}
-              value={tempReceitaCat}
-              onChange={e => setTempReceitaCat(e.target.value)}
-            >
-              <option value="">Selecione a categoria...</option>
-              {categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2').map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div style={{ position: 'relative', flex: '0 0 120px' }}>
-                <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
-                <input
-                  type="text"
-                  placeholder="0,00"
-                  style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
-                  value={tempReceitaVal}
-                  onChange={e => setTempReceitaVal(formatCurrencyMask(e.target.value))}
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="Observação da receita..."
-                style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }}
-                value={obsReceita}
-                onChange={e => setObsReceita(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => handleAddItem('CREDITO')}
-              style={{ width: '100%', padding: '12px', background: '#166534', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-            >
-              <Plus size={16} /> Adicionar Receita
-            </button>
-          </div>
+            {!isLocked && (
+              <div className="insertion-fields-card" style={{ marginBottom: '20px', padding: '24px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                  {/* RECEITA COL */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <span style={{ fontWeight: 800, color: '#166534', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingUp size={14} /> Receita
+                    </span>
+                    <select
+                      style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#fff', outline: 'none' }}
+                      value={tempReceitaCat}
+                      onChange={e => setTempReceitaCat(e.target.value)}
+                    >
+                      <option value="">Selecione a categoria...</option>
+                      {categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2').map(c => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <div style={{ position: 'relative', flex: '0 0 120px' }}>
+                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
+                        <input
+                          type="text"
+                          placeholder="0,00"
+                          style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
+                          value={tempReceitaVal}
+                          onChange={e => setTempReceitaVal(formatCurrencyMask(e.target.value))}
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Observação da receita..."
+                        style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }}
+                        value={obsReceita}
+                        onChange={e => setObsReceita(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleAddItem('CREDITO')}
+                      style={{ width: '100%', padding: '12px', background: '#166534', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <Plus size={16} /> Adicionar Receita
+                    </button>
+                  </div>
 
-          {/* DESPESA COL */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <span style={{ fontWeight: 800, color: '#991b1b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingDown size={14} /> Despesa
-            </span>
-            <select
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#fff', outline: 'none' }}
-              value={tempDespesaCat}
-              onChange={e => setTempDespesaCat(e.target.value)}
-            >
-              <option value="">Selecione a categoria...</option>
-              {categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2').map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div style={{ position: 'relative', flex: '0 0 120px' }}>
-                <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
-                <input
-                  type="text"
-                  placeholder="0,00"
-                  style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
-                  value={tempDespesaVal}
-                  onChange={e => setTempDespesaVal(formatCurrencyMask(e.target.value))}
-                />
+                  {/* DESPESA COL */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <span style={{ fontWeight: 800, color: '#991b1b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingDown size={14} /> Despesa
+                    </span>
+                    <select
+                      style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#fff', outline: 'none' }}
+                      value={tempDespesaCat}
+                      onChange={e => setTempDespesaCat(e.target.value)}
+                    >
+                      <option value="">Selecione a categoria...</option>
+                      {categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2').map(c => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <div style={{ position: 'relative', flex: '0 0 120px' }}>
+                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>R$</span>
+                        <input
+                          type="text"
+                          placeholder="0,00"
+                          style={{ width: '100%', padding: '12px 12px 12px 32px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 700, outline: 'none' }}
+                          value={tempDespesaVal}
+                          onChange={e => setTempDespesaVal(formatCurrencyMask(e.target.value))}
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Observação da despesa..."
+                        style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }}
+                        value={obsDespesa}
+                        onChange={e => setObsDespesa(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleAddItem('DEBITO')}
+                      style={{ width: '100%', padding: '12px', background: '#991b1b', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <Plus size={16} /> Adicionar Despesa
+                    </button>
+                  </div>
+                </div>
               </div>
-              <input
-                type="text"
-                placeholder="Observação da despesa..."
-                style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }}
-                value={obsDespesa}
-                onChange={e => setObsDespesa(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => handleAddItem('DEBITO')}
-              style={{ width: '100%', padding: '12px', background: '#991b1b', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-            >
-              <Plus size={16} /> Adicionar Despesa
-            </button>
-          </div>
-        </div>
-      </div>
+            )}
 
             <div className="spreadsheet-grid" style={{ display: 'flex', gap: '20px' }}>
               {/* RECEITAS */}
@@ -421,38 +565,54 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                   <TrendingUp size={18} /> {t('planilha.receitas')}
                 </h4>
                 <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                   <div style={{ display: 'flex', padding: '8px 12px', fontSize: '11px', fontWeight: 800, color: '#64748b' }}>
-                      <div style={{ width: '40px' }}>CÓD.</div>
-                      <div style={{ flex: 1 }}>DESCRIÇÃO</div>
-                      <div style={{ width: '110px', textAlign: 'right' }}>VALOR (R$)</div>
-                   </div>
+                  <div style={{ display: 'flex', padding: '8px 12px', fontSize: '10px', fontWeight: 800, color: '#64748b' }}>
+                    <div style={{ width: '50px' }}>CÓD.</div>
+                    <div style={{ flex: 1 }}>DESCRIÇÃO</div>
+                    <div style={{ width: '90px', textAlign: 'right' }}>CASA (R$)</div>
+                    <div style={{ width: '90px', textAlign: 'right' }}>MISSIO. (R$)</div>
+                    <div style={{ width: '95px', textAlign: 'right' }}>TOTAL (R$)</div>
+                  </div>
                 </div>
                 <div style={{ padding: '2px 0' }}>
-                  {categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2').map(cat => (
-                    <div key={cat.id} style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', background: '#fff', fontSize: '12px', alignItems: 'center', padding: '4px 12px' }}>
-                      <div style={{ width: '40px', fontWeight: 700, color: '#166534' }}>{cat.codigo}</div>
-                      <div style={{ flex: 1, color: '#334155' }}>{cat.nome}</div>
-                      <div style={{ width: '110px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 8px', width: '100px' }}>
-                          <input
-                            type="text"
-                            placeholder="0,00"
-                            value={formatCurrencyMask(numToDigits(editValues[cat.id] || 0))}
-                            onChange={e => {
-                              const masked = formatCurrencyMask(e.target.value);
-                              setEditValues({ ...editValues, [cat.id]: parseMaskedCurrency(masked) });
-                            }}
-                            style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 700, fontSize: '12px', color: '#0f172a', outline: 'none' }}
-                            disabled={planilha?.status === 'VALIDADO'}
-                          />
+                  {categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2').map(cat => {
+                    const houseVal = editValues[cat.id] || 0;
+                    const missVal = missionarySums[cat.id] || 0;
+                    const totalVal = houseVal + missVal;
+                    return (
+                      <div key={cat.id} style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', background: '#fff', fontSize: '12px', alignItems: 'center', padding: '6px 12px' }}>
+                        <div style={{ width: '50px', fontWeight: 700, color: '#166534' }}>{cat.codigo}</div>
+                        <div style={{ flex: 1, color: '#334155', paddingRight: '10px' }}>{cat.nome}</div>
+
+                        {/* Casa */}
+                        <div style={{ width: '90px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '2px 6px', width: '80px' }}>
+                            <input
+                              type="text"
+                              placeholder="0,00"
+                              value={formatCurrencyMask(numToDigits(houseVal))}
+                              readOnly
+                              disabled
+                              style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 600, fontSize: '11px', color: '#475569', cursor: 'not-allowed' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Missionários */}
+                        <div style={{ width: '90px', textAlign: 'right', color: '#64748b', fontWeight: 500, fontSize: '11px', paddingRight: '8px' }}>
+                          {missVal > 0 ? `R$ ${missVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                        </div>
+
+                        {/* Total */}
+                        <div style={{ width: '95px', textAlign: 'right', fontWeight: 700, color: '#166534', fontSize: '11px' }}>
+                          R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{ background: '#f0fdf4', padding: '12px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, borderTop: '2px solid #bcf0da', color: '#166534' }}>
-                   <span>TOTAL RECEITAS</span>
-                   <span>R$ {totals.credito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span>TOTAL RECEITAS</span>
+                  <span>R$ {totals.credito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
@@ -462,38 +622,54 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                   <TrendingDown size={18} /> {t('planilha.despesas')}
                 </h4>
                 <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                   <div style={{ display: 'flex', padding: '8px 12px', fontSize: '11px', fontWeight: 800, color: '#64748b' }}>
-                      <div style={{ width: '40px' }}>CÓD.</div>
-                      <div style={{ flex: 1 }}>DESCRIÇÃO</div>
-                      <div style={{ width: '110px', textAlign: 'right' }}>VALOR (R$)</div>
-                   </div>
+                  <div style={{ display: 'flex', padding: '8px 12px', fontSize: '10px', fontWeight: 800, color: '#64748b' }}>
+                    <div style={{ width: '50px' }}>CÓD.</div>
+                    <div style={{ flex: 1 }}>DESCRIÇÃO</div>
+                    <div style={{ width: '90px', textAlign: 'right' }}>CASA (R$)</div>
+                    <div style={{ width: '90px', textAlign: 'right' }}>MISSIO. (R$)</div>
+                    <div style={{ width: '95px', textAlign: 'right' }}>TOTAL (R$)</div>
+                  </div>
                 </div>
                 <div style={{ padding: '2px 0' }}>
-                  {categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2').map(cat => (
-                    <div key={cat.id} style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', background: '#fff', fontSize: '12px', alignItems: 'center', padding: '4px 12px' }}>
-                      <div style={{ width: '40px', fontWeight: 700, color: '#991b1b' }}>{cat.codigo}</div>
-                      <div style={{ flex: 1, color: '#334155' }}>{cat.nome}</div>
-                      <div style={{ width: '110px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 8px', width: '100px' }}>
-                          <input
-                            type="text"
-                            placeholder="0,00"
-                            value={formatCurrencyMask(numToDigits(editValues[cat.id] || 0))}
-                            onChange={e => {
-                              const masked = formatCurrencyMask(e.target.value);
-                              setEditValues({ ...editValues, [cat.id]: parseMaskedCurrency(masked) });
-                            }}
-                            style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 700, fontSize: '12px', color: '#0f172a', outline: 'none' }}
-                            disabled={planilha?.status === 'VALIDADO'}
-                          />
+                  {categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2').map(cat => {
+                    const houseVal = editValues[cat.id] || 0;
+                    const missVal = missionarySums[cat.id] || 0;
+                    const totalVal = houseVal + missVal;
+                    return (
+                      <div key={cat.id} style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', background: '#fff', fontSize: '12px', alignItems: 'center', padding: '6px 12px' }}>
+                        <div style={{ width: '50px', fontWeight: 700, color: '#991b1b' }}>{cat.codigo}</div>
+                        <div style={{ flex: 1, color: '#334155', paddingRight: '10px' }}>{cat.nome}</div>
+
+                        {/* Casa */}
+                        <div style={{ width: '90px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '2px 6px', width: '80px' }}>
+                            <input
+                              type="text"
+                              placeholder="0,00"
+                              value={formatCurrencyMask(numToDigits(houseVal))}
+                              readOnly
+                              disabled
+                              style={{ textAlign: 'right', border: 'none', background: 'transparent', width: '100%', fontWeight: 600, fontSize: '11px', color: '#475569', cursor: 'not-allowed' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Missionários */}
+                        <div style={{ width: '90px', textAlign: 'right', color: '#64748b', fontWeight: 500, fontSize: '11px', paddingRight: '8px' }}>
+                          {missVal > 0 ? `R$ ${missVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                        </div>
+
+                        {/* Total */}
+                        <div style={{ width: '95px', textAlign: 'right', fontWeight: 700, color: '#991b1b', fontSize: '11px' }}>
+                          R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{ background: '#fef2f2', padding: '12px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, borderTop: '2px solid #fecaca', color: '#991b1b' }}>
-                   <span>TOTAL DESPESAS</span>
-                   <span>R$ {totals.debito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span>TOTAL DESPESAS</span>
+                  <span>R$ {totals.debito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
 
                 <div style={{ padding: '15px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
@@ -510,6 +686,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                       value={numMissas}
                       onChange={e => setNumMissas(parseInt(e.target.value) || 0)}
                       style={{ width: '70px', padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 800, background: '#fff' }}
+                      disabled={isLocked}
                     />
                   </div>
                 </div>
@@ -517,7 +694,8 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
             </div>
 
 
-            <div className="spreadsheet-summary" style={{ marginTop: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '20px' }}>
+            {!initialCasa ? (
+              <div className="spreadsheet-summary" style={{ marginTop: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
                     type="file"
@@ -525,7 +703,7 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                     style={{ display: 'none' }}
                     onChange={e => setAnexoFile(e.target.files?.[0] || null)}
                   />
-                  <label htmlFor="anexo-comunidade" className="btn-save" style={{ cursor: 'pointer', background: '#013375', color: 'white', border: 'none', height: '38px', padding: '0 20px', margin: 0 }}>
+                  <label htmlFor="anexo-comunidade" className="btn-save" style={{ cursor: isLocked ? 'not-allowed' : 'pointer', opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto', background: '#013375', color: 'white', border: 'none', height: '38px', padding: '0 20px', margin: 0, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
                     <FileText size={18} /> {anexoFile ? anexoFile.name : (anexoUrl ? t('planilha.replace_files') : t('planilha.attach_files'))}
                   </label>
                   {anexoUrl && (
@@ -534,27 +712,117 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                     </a>
                   )}
                 </div>
-            </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {(!planilha || (planilha.status !== 'APROVADO' && planilha.status !== 'ENVIADO_REGIONAL')) && (
+                    <>
+                      <button
+                        className="btn-save"
+                        onClick={handleSave}
+                        disabled={isSaving || isUploading}
+                        style={{ background: '#64748b', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                      >
+                        {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                        Salvar Rascunho
+                      </button>
+                      <button
+                        className="btn-save"
+                        onClick={handleSendToRegional}
+                        disabled={isSaving || isUploading}
+                        style={{ background: '#10b981', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.3)' }}
+                      >
+                        {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                        Enviar para o Regional
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {anexoUrl && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <a
+                      href={`${api.defaults.baseURL}${anexoUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-save"
+                      style={{ background: '#013375', color: 'white', textDecoration: 'none', height: '38px', padding: '0 20px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
+                    >
+                      <FileText size={18} /> Ver Recibos Anexados
+                    </a>
+                  </div>
+                )}
+
+                {planilha && planilha.status === 'ENVIADO_REGIONAL' ? (
+                  <div className="validation-bar card-lite" style={{ padding: '24px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: 800, color: '#013375' }}>Feedback / Apontamentos para a Casa Religiosa</h4>
+                    <textarea
+                      placeholder="Descreva o motivo da devolução, caso haja correções a fazer..."
+                      value={apontamentos}
+                      onChange={e => setApontamentos(e.target.value)}
+                      style={{ width: '100%', minHeight: '80px', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '16px', fontSize: '13px', outline: 'none' }}
+                    />
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button
+                        onClick={() => handleValidateCommunity('APROVADO')}
+                        style={{ background: '#10b981', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      >
+                        Aprovar Prestação
+                      </button>
+                      <button
+                        onClick={() => handleValidateCommunity('DEVOLVIDO_SUPERIOR')}
+                        style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      >
+                        Devolver para Ajustes
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  planilha && (
+                    <div style={{ padding: '15px', background: '#f1f5f9', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                      <p style={{ margin: 0, fontWeight: 700, color: '#475569' }}>
+                        Status da Prestação: <span style={{ textTransform: 'uppercase', color: planilha.status === 'APROVADO' ? '#10b981' : '#ef4444' }}>{planilha.status === 'DEVOLVIDO_SUPERIOR' ? 'DEVOLVIDO' : planilha.status}</span>
+                      </p>
+                      {apontamentos && (
+                        <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                          <strong>Apontamentos:</strong> {apontamentos}
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            )}
 
             {/* ═══════════════ DEMONSTRATIVO DETALHADO ═══════════════ */}
             {(() => {
               const receitaMap: Record<string, number> = {};
               const despesaMap: Record<string, number> = {};
 
-              // From grid
-              categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2' && (editValues[c.id] || 0) > 0)
-                .forEach(c => { receitaMap[c.nome] = (receitaMap[c.nome] || 0) + (editValues[c.id] || 0); });
-              categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2' && (editValues[c.id] || 0) > 0)
-                .forEach(c => { despesaMap[c.nome] = (despesaMap[c.nome] || 0) + (editValues[c.id] || 0); });
+              // From individual logs (community values)
+              entryLogs.filter(e => e.tipo === 'CREDITO').forEach(e => {
+                receitaMap[e.categoriaNome] = (receitaMap[e.categoriaNome] || 0) + e.valor;
+              });
+              entryLogs.filter(e => e.tipo === 'DEBITO').forEach(e => {
+                despesaMap[e.categoriaNome] = (despesaMap[e.categoriaNome] || 0) + e.valor;
+              });
 
-              // From individual logs
-              entryLogs.filter(e => e.tipo === 'CREDITO').forEach(e => { receitaMap[e.categoriaNome] = (receitaMap[e.categoriaNome] || 0) + e.valor; });
-              entryLogs.filter(e => e.tipo === 'DEBITO').forEach(e => { despesaMap[e.categoriaNome] = (despesaMap[e.categoriaNome] || 0) + e.valor; });
+              // Plus Missionary sums (missionary values)
+              categorias.filter(c => c.perfil === 'PERFIL_2').forEach(c => {
+                const missVal = missionarySums[c.id] || 0;
+                if (missVal > 0) {
+                  if (c.tipo === 'CREDITO') {
+                    receitaMap[c.nome] = (receitaMap[c.nome] || 0) + missVal;
+                  } else {
+                    despesaMap[c.nome] = (despesaMap[c.nome] || 0) + missVal;
+                  }
+                }
+              });
 
               const totalRec = Object.values(receitaMap).reduce((s, v) => s + v, 0);
               const totalDep = Object.values(despesaMap).reduce((s, v) => s + v, 0);
               const totalSaldo = totalRec - totalDep;
-              const hasData = Object.keys(receitaMap).length > 0 || Object.keys(despesaMap).length > 0;
+              const hasData = entryLogs.length > 0 || Object.keys(missionarySums).some(id => missionarySums[parseInt(id)] > 0);
 
               if (!hasData) return null;
               return (
@@ -602,74 +870,6 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                   </div>
 
                   <div style={{ padding: '24px' }}>
-
-                    {/* ══ SEÇÃO 1 — Itens da Planilha ══ */}
-                    {(() => {
-                      const planilhaReceitas = categorias.filter(c => c.tipo === 'CREDITO' && c.perfil === 'PERFIL_2' && (editValues[c.id] || 0) > 0);
-                      const planilhaDespesas = categorias.filter(c => c.tipo === 'DEBITO' && c.perfil === 'PERFIL_2' && (editValues[c.id] || 0) > 0);
-                      const hasPlanilha = planilhaReceitas.length > 0 || planilhaDespesas.length > 0;
-                      return (
-                        <div style={{ marginBottom: '24px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                            <div style={{ width: '4px', height: '18px', background: 'linear-gradient(180deg,#0369a1,#0ea5e9)', borderRadius: '2px' }} />
-                            <span style={{ fontWeight: 800, fontSize: '13px', color: '#0c4a6e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              Itens da Planilha ({planilhaReceitas.length + planilhaDespesas.length})
-                            </span>
-                            <span style={{ marginLeft: '8px', fontSize: '10px', fontWeight: 600, color: '#94a3b8', fontStyle: 'italic' }}>
-                              — valores digitados diretamente nas linhas da grade
-                            </span>
-                          </div>
-                          {hasPlanilha ? (
-                            <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #bae6fd' }}>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                <thead>
-                                  <tr style={{ background: 'linear-gradient(90deg,#0369a1,#0ea5e9)' }}>
-                                    <th style={{ padding: '10px 14px', textAlign: 'left', color: '#e0f2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tipo</th>
-                                    <th style={{ padding: '10px 14px', textAlign: 'left', color: '#e0f2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Categoria</th>
-                                    <th style={{ padding: '10px 14px', textAlign: 'right', color: '#e0f2fe', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Valor (R$)</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {planilhaReceitas.map((cat, idx) => (
-                                    <tr key={`pr-${cat.id}`} style={{ background: idx % 2 === 0 ? '#fff' : '#f0f9ff', borderBottom: '1px solid #e0f2fe' }}>
-                                      <td style={{ padding: '9px 14px' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 700, background: '#d1fae5', color: '#065f46' }}>
-                                          ▲ Receita
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '9px 14px', color: '#0c4a6e', fontWeight: 600 }}>{cat.nome}</td>
-                                      <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, fontSize: '13px', color: '#065f46' }}>
-                                        {(editValues[cat.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                  {planilhaDespesas.map((cat, idx) => (
-                                    <tr key={`pd-${cat.id}`} style={{ background: (planilhaReceitas.length + idx) % 2 === 0 ? '#fff' : '#f0f9ff', borderBottom: '1px solid #e0f2fe' }}>
-                                      <td style={{ padding: '9px 14px' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 700, background: '#fee2e2', color: '#991b1b' }}>
-                                          ▼ Despesa
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '9px 14px', color: '#0c4a6e', fontWeight: 600 }}>{cat.nome}</td>
-                                      <td style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 800, fontSize: '13px', color: '#991b1b' }}>
-                                        {(editValues[cat.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', fontSize: '12px', fontStyle: 'italic' }}>
-                              Nenhum valor preenchido na planilha ainda.
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Divisor */}
-                    <div style={{ borderTop: '2px dashed #c7d2fe', marginBottom: '24px' }} />
 
                     {/* ══ SEÇÃO 2 — Lançamentos Individuais ══ */}
                     <div style={{ marginBottom: '28px' }}>
@@ -724,11 +924,13 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias }) => {
                                     {entry.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                   </td>
                                   <td style={{ padding: '10px 10px', textAlign: 'center' }}>
-                                    <button
-                                      title="Remover lançamento"
-                                      onClick={() => setEntryLogs(prev => prev.filter(e => e.id !== entry.id))}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a5b4fc', fontSize: '14px', lineHeight: 1, padding: '2px 4px', borderRadius: '4px' }}
-                                    >✕</button>
+                                    {!isLocked && (
+                                      <button
+                                        title="Remover lançamento"
+                                        onClick={() => handleRemoveItem(entry.id)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a5b4fc', fontSize: '14px', lineHeight: 1, padding: '2px 4px', borderRadius: '4px' }}
+                                      >✕</button>
+                                    )}
                                   </td>
                                 </tr>
                               ))}
