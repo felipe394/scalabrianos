@@ -2691,18 +2691,18 @@ app.put('/api/financas-comunidade/:id/validar', authenticateToken, async (req, r
 
 app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
   try {
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
-    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+    const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
+    const dbUser = userRows[0];
+    const isAdmin = req.user.role === 'ADMIN_GERAL';
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || (dbUser && dbUser.role === 'ECONOMO_REGIONAL');
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (dbUser && dbUser.is_oconomo);
 
-    // Fetch userCasaId if local economist
-    let userCasaId = null;
-    if (isLocalEco) {
-      const [houseRow] = await db.query(
-        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
-        [req.user.id]
-      );
-      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
-    }
+    // Fetch userCasaId
+    const [houseRow] = await db.query(
+      'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+      [req.user.id]
+    );
+    const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     const items = [];
 
@@ -2715,7 +2715,7 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
       WHERE p.status IN ('PENDENTE', 'EM_VALIDACAO')
     `;
     const paramsMensal = [];
-    if (isLocalEco) {
+    if (!isAdmin) {
       queryMensal += " AND p.casa_id = ?";
       paramsMensal.push(userCasaId);
     }
@@ -2735,15 +2735,20 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
     });
 
     // 2. Fetch pending community consolidated sheets (only for regional/admin)
-    if (isRegional) {
-      const queryConsolidado = `
+    if (isRegional || isAdmin) {
+      let queryConsolidado = `
         SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, p.usuario_id
         FROM tb_financas_consolidado p
         JOIN tb_usuarios u ON p.usuario_id = u.id
         JOIN tb_casas_religiosas c ON p.casa_id = c.id
         WHERE p.status = 'ENVIADO_REGIONAL'
       `;
-      const [rowsConsolidado] = await db.query(queryConsolidado);
+      const paramsConsolidado = [];
+      if (!isAdmin) {
+        queryConsolidado += " AND p.casa_id = ?";
+        paramsConsolidado.push(userCasaId);
+      }
+      const [rowsConsolidado] = await db.query(queryConsolidado, paramsConsolidado);
       rowsConsolidado.forEach(r => {
         items.push({
           id: r.id,
@@ -2768,18 +2773,16 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
 
 app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, res) => {
   try {
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
-    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+    const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
+    const dbUser = userRows[0];
+    const isAdmin = req.user.role === 'ADMIN_GERAL';
 
-    // Fetch userCasaId if local economist
-    let userCasaId = null;
-    if (isLocalEco) {
-      const [houseRow] = await db.query(
-        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
-        [req.user.id]
-      );
-      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
-    }
+    // Fetch userCasaId
+    const [houseRow] = await db.query(
+      'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+      [req.user.id]
+    );
+    const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
       SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador
@@ -2790,7 +2793,7 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
       WHERE p.status IN ('VALIDADO', 'DEVOLVIDO')
     `;
     const params = [];
-    if (isLocalEco) {
+    if (!isAdmin) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
@@ -2817,18 +2820,16 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
 
 app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) => {
   try {
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
-    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+    const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
+    const dbUser = userRows[0];
+    const isAdmin = req.user.role === 'ADMIN_GERAL';
 
-    // Fetch userCasaId if local economist
-    let userCasaId = null;
-    if (isLocalEco) {
-      const [houseRow] = await db.query(
-        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
-        [req.user.id]
-      );
-      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
-    }
+    // Fetch userCasaId
+    const [houseRow] = await db.query(
+      'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+      [req.user.id]
+    );
+    const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
       SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador, p.usuario_id
@@ -2839,7 +2840,7 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
       WHERE p.status IN ('APROVADO', 'DEVOLVIDO_SUPERIOR')
     `;
     const params = [];
-    if (isLocalEco) {
+    if (!isAdmin) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
@@ -2866,18 +2867,18 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
 
 app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
   try {
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
-    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+    const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
+    const dbUser = userRows[0];
+    const isAdmin = req.user.role === 'ADMIN_GERAL';
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || (dbUser && dbUser.role === 'ECONOMO_REGIONAL');
+    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (dbUser && dbUser.is_oconomo);
 
-    // Fetch userCasaId if local economist
-    let userCasaId = null;
-    if (isLocalEco) {
-      const [houseRow] = await db.query(
-        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
-        [req.user.id]
-      );
-      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
-    }
+    // Fetch userCasaId
+    const [houseRow] = await db.query(
+      'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+      [req.user.id]
+    );
+    const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
       SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_missionario, p.mes_referencia, p.total_credito, p.total_debito, (p.total_credito - p.total_debito) as saldo, p.updated_at as data_validacao, c.nome as nome_casa
@@ -2887,9 +2888,16 @@ app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
       WHERE p.status = 'VALIDADO'
     `;
     const params = [];
-    if (isLocalEco) {
-      query += " AND p.casa_id = ?";
-      params.push(userCasaId);
+    if (!isAdmin) {
+      if (isLocalEco && !isRegional) {
+        // Local Economist only sees their own personal statements
+        query += " AND p.usuario_id = ?";
+        params.push(req.user.id);
+      } else {
+        // Regional Economist sees all statements for their house
+        query += " AND p.casa_id = ?";
+        params.push(userCasaId);
+      }
     }
     query += " ORDER BY p.mes_referencia DESC, p.updated_at DESC";
     const [rows] = await db.query(query, params);
@@ -2901,18 +2909,16 @@ app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
 
 app.get('/api/extratos/casas', authenticateToken, async (req, res) => {
   try {
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'ADMIN_GERAL';
-    const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (req.user.is_oconomo && !isRegional);
+    const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
+    const dbUser = userRows[0];
+    const isAdmin = req.user.role === 'ADMIN_GERAL';
 
-    // Fetch userCasaId if local economist
-    let userCasaId = null;
-    if (isLocalEco) {
-      const [houseRow] = await db.query(
-        'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
-        [req.user.id]
-      );
-      userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
-    }
+    // Fetch userCasaId
+    const [houseRow] = await db.query(
+      'SELECT casa_id FROM tb_missionario_casas WHERE usuario_id = ? AND (data_fim IS NULL OR data_fim >= CURDATE()) LIMIT 1',
+      [req.user.id]
+    );
+    const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
       SELECT p.id, p.casa_id, c.nome as nome_casa, p.mes_referencia, p.total_credito, p.total_debito, (p.total_credito - p.total_debito) as saldo, p.updated_at as data_validacao, p.usuario_id
@@ -2921,7 +2927,7 @@ app.get('/api/extratos/casas', authenticateToken, async (req, res) => {
       WHERE p.status = 'APROVADO'
     `;
     const params = [];
-    if (isLocalEco) {
+    if (!isAdmin) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
