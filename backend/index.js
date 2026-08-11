@@ -1387,8 +1387,8 @@ app.post('/api/usuarios/:id/itinerario', authenticateToken, async (req, res) => 
     await db.query('DELETE FROM tb_itinerario_formativo WHERE usuario_id = ?', [req.params.id]);
     for (const stage of stages) {
       await db.query(
-        'INSERT INTO tb_itinerario_formativo (usuario_id, etapa, local, periodo, is_sub_etapa, doc_path) VALUES (?, ?, ?, ?, ?, ?)',
-        [req.params.id, stage.etapa, stage.local, stage.periodo, stage.is_sub_etapa || 0, stage.doc_path || null]
+        'INSERT INTO tb_itinerario_formativo (usuario_id, etapa, local, periodo, is_sub_etapa, doc_path, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [req.params.id, stage.etapa, stage.local, stage.periodo, stage.is_sub_etapa || 0, stage.doc_path || null, stage.observacoes || stage.observacao || null]
       );
     }
     res.json({ success: true });

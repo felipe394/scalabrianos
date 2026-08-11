@@ -137,6 +137,7 @@ interface ItineraryStage {
   is_sub_etapa: boolean;
   local: string;
   periodo: string;
+  observacoes?: string;
 }
 
 const initialWizard: WizardData = {
@@ -1241,8 +1242,8 @@ const Missionarios: React.FC = () => {
                           </div>
                         );
                       }
-                      const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa) || { etapa: (seg.etapa as string), is_sub_etapa: true, local: '', periodo: '' };
-                      const updateStage = (field: 'local' | 'periodo', val: string) => {
+                      const stage = wizardData.itinerario.find(s => s.etapa === seg.etapa) || { etapa: (seg.etapa as string), is_sub_etapa: true, local: '', periodo: '', observacoes: '' };
+                      const updateStage = (field: 'local' | 'periodo' | 'observacoes', val: string) => {
                         const newItin = [...wizardData.itinerario];
                         let ti = newItin.findIndex(s => s.etapa === seg.etapa);
                         if (ti > -1) {
@@ -1252,16 +1253,24 @@ const Missionarios: React.FC = () => {
                         }
                         set('itinerario', newItin);
                       };
+                      const showObs = seg.etapa === '4.1.5' || seg.etapa === '4.1.7' || (seg.etapa && seg.etapa.startsWith('4.2'));
                       return (
                         <div key={idx} style={{ padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fafafa' }}>
                           <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#013375', marginBottom: '6px' }}>{seg.label}</div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <div className="form-group" style={{ flex: 1 }}>
-                              <input type="text" value={stage.periodo} onChange={e => updateStage('periodo', e.target.value)} placeholder="Período (ex: 1990-1994)" style={{ fontSize: '0.78rem' }} />
+                          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <input type="text" value={stage.periodo} onChange={e => updateStage('periodo', e.target.value)} placeholder="Período (ex: 1990-1994)" style={{ fontSize: '0.78rem' }} />
+                              </div>
+                              <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                                <input type="text" value={stage.local} onChange={e => updateStage('local', e.target.value)} placeholder="Local / Instituição" style={{ fontSize: '0.78rem' }} />
+                              </div>
                             </div>
-                            <div className="form-group" style={{ flex: 2 }}>
-                              <input type="text" value={stage.local} onChange={e => updateStage('local', e.target.value)} placeholder="Local / Instituição" style={{ fontSize: '0.78rem' }} />
-                            </div>
+                            {showObs && (
+                              <div className="form-group" style={{ marginBottom: 0, width: '100%' }}>
+                                <input type="text" value={stage.observacoes || ''} onChange={e => updateStage('observacoes', e.target.value)} placeholder="Observações" style={{ fontSize: '0.78rem', width: '100%' }} />
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

@@ -32,6 +32,7 @@ interface ItineraryStage {
   periodo: string;
   is_sub_etapa: boolean;
   doc_path?: string;
+  observacoes?: string;
 }
 
 interface CivilData {
@@ -1269,20 +1270,26 @@ const PerfilMissionario: React.FC = () => {
     return !!missionario.permissoes?.[tab.perm];
   });
 
+  const shouldShowObservacoes = (etapa?: string) => {
+    if (!etapa) return false;
+    const cleanEtapa = etapa.split('-')[0];
+    return cleanEtapa === '4.1.5' || cleanEtapa === '4.1.7' || cleanEtapa.startsWith('4.2');
+  };
+
   // Helper: renders itinerary stage items for a given sub-section
   const renderItinSubItems = (subItems: Array<{ label: string; etapaKey: string }>) => (
     <>
       <div style={{ marginTop: '16px' }}>
         {subItems.map(sub => {
           const matchingStages = itinerarioStages.filter(s => s.etapa === sub.etapaKey || s.etapa.startsWith(sub.etapaKey + '-'));
-          const stagesToRender = matchingStages.length > 0 ? matchingStages : [{ etapa: sub.etapaKey, local: '', periodo: '', doc_path: '', is_sub_etapa: false }];
+          const stagesToRender = matchingStages.length > 0 ? matchingStages : [{ etapa: sub.etapaKey, local: '', periodo: '', doc_path: '', is_sub_etapa: false, observacoes: '' }];
           return (
             <div key={sub.etapaKey} style={{ marginBottom: '20px', padding: '12px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{sub.label}</strong>
                 {canEdit && (
                   <button type="button" className="btn-action-lite-text" style={{ fontSize: '0.8rem', padding: '2px 8px' }}
-                    onClick={() => { const ne = `${sub.etapaKey}-${Date.now()}`; setItinerarioStages([...itinerarioStages, { etapa: ne, local: '', periodo: '', doc_path: '', is_sub_etapa: true }]); }}>
+                    onClick={() => { const ne = `${sub.etapaKey}-${Date.now()}`; setItinerarioStages([...itinerarioStages, { etapa: ne, local: '', periodo: '', doc_path: '', is_sub_etapa: true, observacoes: '' }]); }}>
                     <Plus size={14} /> Novo Local/Período
                   </button>
                 )}
@@ -1295,6 +1302,11 @@ const PerfilMissionario: React.FC = () => {
                   <input type="text" placeholder="Local / Instituição" value={stage.local}
                     onChange={e => { const val = e.target.value; const updated = itinerarioStages.some(s => s.etapa === stage.etapa) ? itinerarioStages.map(s => s.etapa === stage.etapa ? { ...s, local: val } : s) : [...itinerarioStages, { ...stage, local: val }]; setItinerarioStages(updated); }}
                     disabled={!canEdit} style={{ flex: '2', minWidth: '220px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
+                  {shouldShowObservacoes(stage.etapa) && (
+                    <input type="text" placeholder="Observações" value={stage.observacoes || ''}
+                      onChange={e => { const val = e.target.value; const updated = itinerarioStages.some(s => s.etapa === stage.etapa) ? itinerarioStages.map(s => s.etapa === stage.etapa ? { ...s, observacoes: val } : s) : [...itinerarioStages, { ...stage, observacoes: val }]; setItinerarioStages(updated); }}
+                      disabled={!canEdit} style={{ flex: '2', minWidth: '220px', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
+                  )}
                   <div className="itin-doc-actions" style={{ display: 'flex', gap: '6px' }}>
                     {stage.doc_path ? (
                       <a href={getFileUrl(stage.doc_path) || '#'} target="_blank" rel="noreferrer" className="btn-itin-doc success"><FileText size={14} /> Ver Doc</a>

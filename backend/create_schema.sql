@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS tb_itinerario_formativo (
     local VARCHAR(255),
     periodo VARCHAR(100),
     doc_path VARCHAR(500),
+    observacoes TEXT,
     FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id) ON DELETE CASCADE
 );
 
