@@ -26,6 +26,7 @@ interface ValidationItem {
   status: string;
   updated_at: string;
   nome_validador?: string;
+  codigo_pm?: string;
 }
 
 interface Props {
@@ -49,7 +50,7 @@ const ValidacoesOconomo: React.FC<Props> = ({ casas, categorias, tipo }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const cardsPerPage = 9;
 
-  const isRegional = user?.role === 'ECONOMO_REGIONAL' || user?.role === 'ADMIN_GERAL';
+  const isRegional = user?.role === 'ECONOMO_REGIONAL' || user?.role === 'SUPERIOR_REGIONAL' || user?.role === 'ADMIN_GERAL';
 
   const fetchItems = async () => {
     setIsLoading(true);
@@ -102,6 +103,48 @@ const ValidacoesOconomo: React.FC<Props> = ({ casas, categorias, tipo }) => {
   if (selectedPlanilha) {
     return (
       <div className="validation-review-container">
+        {/* Info Banner showing House Name, Month/Year & PM Code */}
+        <div style={{
+          background: 'linear-gradient(135deg, #013375 0%, #1e40af 100%)',
+          color: 'white',
+          padding: '18px 24px',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '16px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div>
+            <div style={{ fontSize: '11px', opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+              {selectedPlanilha.tipo_planilha === 'comunidade' ? 'Planilha da Casa Religiosa' : 'Planilha do Missionário'}
+            </div>
+            <div style={{ fontSize: '20px', fontWeight: 900, marginTop: '2px' }}>
+              {selectedPlanilha.nome_usuario_ou_casa}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {selectedPlanilha.nome_casa && (
+              <div>
+                <span style={{ fontSize: '11px', opacity: 0.85, display: 'block', fontWeight: 600 }}>CASA RELIGIOSA</span>
+                <strong style={{ fontSize: '15px' }}>{selectedPlanilha.nome_casa}</strong>
+              </div>
+            )}
+            <div>
+              <span style={{ fontSize: '11px', opacity: 0.85, display: 'block', fontWeight: 600 }}>MÊS / ANO</span>
+              <strong style={{ fontSize: '15px' }}>{selectedPlanilha.mes_referencia}</strong>
+            </div>
+            <div>
+              <span style={{ fontSize: '11px', opacity: 0.85, display: 'block', fontWeight: 600 }}>CÓDIGO PM (PRESENÇA)</span>
+              <strong style={{ fontSize: '14px', background: 'rgba(255, 255, 255, 0.2)', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+                {selectedPlanilha.codigo_pm || 'N/A'}
+              </strong>
+            </div>
+          </div>
+        </div>
+
         <button 
           onClick={() => setSelectedPlanilha(null)}
           style={{ 
@@ -254,6 +297,13 @@ const ValidacoesOconomo: React.FC<Props> = ({ casas, categorias, tipo }) => {
                 {item.nome_casa && (
                   <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginTop: '-4px' }}>
                     Casa: <span style={{ color: '#0f172a' }}>{item.nome_casa}</span>
+                  </div>
+                )}
+
+                {/* Código PM da Presença - exibido para Ecônomo Regional ou nas abas relevantes */}
+                {(isRegional || tipo === 'pendentes') && (
+                  <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 700, background: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '6px', width: 'fit-content' }}>
+                    Código PM: {item.codigo_pm || 'N/A'}
                   </div>
                 )}
                 

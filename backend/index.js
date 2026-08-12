@@ -1100,8 +1100,8 @@ app.get('/api/categorias-financas', authenticateToken, async (req, res) => {
     query += ' ORDER BY categoria_pai, codigo, nome';
     const [rows] = await db.query(query, params);
 
-    // Hide codes for non-admins/non-RH
-    const canSeeCodes = ['ADMIN_GERAL', 'RH'].includes(req.user.role);
+    // Hide codes for non-admins/non-RH/non-regional
+    const canSeeCodes = ['ADMIN_GERAL', 'RH', 'ECONOMO_REGIONAL', 'SUPERIOR_REGIONAL'].includes(req.user.role);
     const sanitizedRows = rows.map(r => {
       const { codigo, ...rest } = r;
       return canSeeCodes ? r : rest;
@@ -2719,7 +2719,12 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
 
     // 1. Fetch pending missionary sheets
     let queryMensal = `
-      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at
+      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at,
+             COALESCE(
+               (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND mc.casa_id = p.casa_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+               (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+               c.pm_code
+             ) as codigo_pm
       FROM tb_financas_mensais p
       JOIN tb_usuarios u ON p.usuario_id = u.id
       JOIN tb_casas_religiosas c ON p.casa_id = c.id
@@ -2741,14 +2746,19 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
         nome_casa: r.nome_casa,
         mes_referencia: r.mes_referencia,
         status: r.status,
-        updated_at: r.updated_at
+        updated_at: r.updated_at,
+        codigo_pm: r.codigo_pm || null
       });
     });
 
     // 2. Fetch pending community consolidated sheets (only for regional/admin)
     if (isRegional || isAdmin) {
       let queryConsolidado = `
-        SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, p.usuario_id
+        SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, p.usuario_id,
+               COALESCE(
+                 (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND mc.casa_id = p.casa_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+                 c.pm_code
+               ) as codigo_pm
         FROM tb_financas_consolidado p
         JOIN tb_usuarios u ON p.usuario_id = u.id
         JOIN tb_casas_religiosas c ON p.casa_id = c.id
@@ -2770,7 +2780,8 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
           nome_casa: r.nome_casa,
           mes_referencia: r.mes_referencia,
           status: r.status,
-          updated_at: r.updated_at
+          updated_at: r.updated_at,
+          codigo_pm: r.codigo_pm || null
         });
       });
     }
@@ -2797,7 +2808,12 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
     const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
-      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador
+      SELECT p.id, p.usuario_id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador,
+             COALESCE(
+               (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND mc.casa_id = p.casa_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+               (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+               c.pm_code
+             ) as codigo_pm
       FROM tb_financas_mensais p
       JOIN tb_usuarios u ON p.usuario_id = u.id
       JOIN tb_casas_religiosas c ON p.casa_id = c.id
@@ -2821,7 +2837,8 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
       mes_referencia: r.mes_referencia,
       status: r.status,
       updated_at: r.updated_at,
-      nome_validador: r.nome_validador || 'N/A'
+      nome_validador: r.nome_validador || 'N/A',
+      codigo_pm: r.codigo_pm || null
     }));
 
     res.json(items);
@@ -2845,7 +2862,11 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
     const userCasaId = houseRow.length > 0 ? houseRow[0].casa_id : null;
 
     let query = `
-      SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador, p.usuario_id
+      SELECT p.id, p.casa_id, u.nome as nome_usuario_ou_casa, c.nome as nome_casa, p.mes_referencia, p.status, p.updated_at, v.nome as nome_validador, p.usuario_id,
+             COALESCE(
+               (SELECT mc.pm FROM tb_missionario_casas mc WHERE mc.usuario_id = p.usuario_id AND mc.casa_id = p.casa_id AND (mc.data_fim IS NULL OR mc.data_fim >= CURDATE()) ORDER BY mc.data_inicio DESC LIMIT 1),
+               c.pm_code
+             ) as codigo_pm
       FROM tb_financas_consolidado p
       JOIN tb_usuarios u ON p.usuario_id = u.id
       JOIN tb_casas_religiosas c ON p.casa_id = c.id
@@ -2869,7 +2890,8 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
       mes_referencia: r.mes_referencia,
       status: r.status === 'DEVOLVIDO_SUPERIOR' ? 'DEVOLVIDO' : r.status,
       updated_at: r.updated_at,
-      nome_validador: r.nome_validador || 'N/A'
+      nome_validador: r.nome_validador || 'N/A',
+      codigo_pm: r.codigo_pm || null
     }));
 
     res.json(items);

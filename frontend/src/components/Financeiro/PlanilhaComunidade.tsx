@@ -462,6 +462,28 @@ const PlanilhaComunidade: React.FC<Props> = ({ casas, categorias, initialCasa, i
               )}
             </div>
           </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              className="btn-export-small"
+              onClick={exportToExcel}
+              style={{
+                background: '#10b981',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                border: 'none',
+                fontSize: '13px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            >
+              <Download size={18} /> Exportar Excel
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
