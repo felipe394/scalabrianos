@@ -1981,9 +1981,16 @@ app.get('/api/financas-mensais/consolidado/casa/:casa_id/mes/:mes', authenticate
 
 app.get('/api/financas-casa/consolidado/status/:casa_id/:mes', authenticateToken, async (req, res) => {
   const { casa_id, mes } = req.params;
-  const targetUid = req.query.usuario_id || req.user.id;
+  const targetUid = req.query.usuario_id;
   try {
-    const [rows] = await db.query('SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?', [casa_id, mes, targetUid]);
+    let query = 'SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?';
+    let params = [casa_id, mes];
+    if (targetUid) {
+      query += ' AND usuario_id = ?';
+      params.push(targetUid);
+    }
+    query += ' ORDER BY id DESC LIMIT 1';
+    const [rows] = await db.query(query, params);
     if (rows.length === 0) {
        // Return a default object if it doesn't exist
        return res.json({ status: 'PENDENTE_ECONOMO', casa_id, mes_referencia: mes });
@@ -2092,11 +2099,15 @@ app.get('/api/financas-comunidade/:casa_id/:mes', authenticateToken, async (req,
     });
 
     // 4. Fetch consolidated house data
-    const targetUid = req.query.usuario_id || req.user.id;
-    const [rows] = await db.query(
-      'SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ? AND usuario_id = ?',
-      [casa_id, mes, targetUid]
-    );
+    const targetUid = req.query.usuario_id;
+    let queryConsolidado = 'SELECT * FROM tb_financas_consolidado WHERE casa_id = ? AND mes_referencia = ?';
+    let paramsConsolidado = [casa_id, mes];
+    if (targetUid) {
+      queryConsolidado += ' AND usuario_id = ?';
+      paramsConsolidado.push(targetUid);
+    }
+    queryConsolidado += ' ORDER BY id DESC LIMIT 1';
+    const [rows] = await db.query(queryConsolidado, paramsConsolidado);
 
     if (rows.length === 0) {
       return res.json({
@@ -2694,7 +2705,7 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
     const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
     const dbUser = userRows[0];
     const isAdmin = req.user.role === 'ADMIN_GERAL';
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || (dbUser && dbUser.role === 'ECONOMO_REGIONAL');
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'SUPERIOR_REGIONAL' || (dbUser && (dbUser.role === 'ECONOMO_REGIONAL' || dbUser.role === 'SUPERIOR_REGIONAL'));
     const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (dbUser && dbUser.is_oconomo);
 
     // Fetch userCasaId
@@ -2715,7 +2726,7 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
       WHERE p.status IN ('PENDENTE', 'EM_VALIDACAO')
     `;
     const paramsMensal = [];
-    if (!isAdmin) {
+    if (!isAdmin && !isRegional) {
       queryMensal += " AND p.casa_id = ?";
       paramsMensal.push(userCasaId);
     }
@@ -2744,7 +2755,7 @@ app.get('/api/validacoes/pendentes', authenticateToken, async (req, res) => {
         WHERE p.status = 'ENVIADO_REGIONAL'
       `;
       const paramsConsolidado = [];
-      if (!isAdmin) {
+      if (!isAdmin && !isRegional) {
         queryConsolidado += " AND p.casa_id = ?";
         paramsConsolidado.push(userCasaId);
       }
@@ -2776,6 +2787,7 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
     const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
     const dbUser = userRows[0];
     const isAdmin = req.user.role === 'ADMIN_GERAL';
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'SUPERIOR_REGIONAL' || (dbUser && (dbUser.role === 'ECONOMO_REGIONAL' || dbUser.role === 'SUPERIOR_REGIONAL'));
 
     // Fetch userCasaId
     const [houseRow] = await db.query(
@@ -2793,7 +2805,7 @@ app.get('/api/validacoes/historico/missionario', authenticateToken, async (req, 
       WHERE p.status IN ('VALIDADO', 'DEVOLVIDO')
     `;
     const params = [];
-    if (!isAdmin) {
+    if (!isAdmin && !isRegional) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
@@ -2823,6 +2835,7 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
     const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
     const dbUser = userRows[0];
     const isAdmin = req.user.role === 'ADMIN_GERAL';
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'SUPERIOR_REGIONAL' || (dbUser && (dbUser.role === 'ECONOMO_REGIONAL' || dbUser.role === 'SUPERIOR_REGIONAL'));
 
     // Fetch userCasaId
     const [houseRow] = await db.query(
@@ -2840,7 +2853,7 @@ app.get('/api/validacoes/historico/casa', authenticateToken, async (req, res) =>
       WHERE p.status IN ('APROVADO', 'DEVOLVIDO_SUPERIOR')
     `;
     const params = [];
-    if (!isAdmin) {
+    if (!isAdmin && !isRegional) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
@@ -2870,7 +2883,7 @@ app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
     const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
     const dbUser = userRows[0];
     const isAdmin = req.user.role === 'ADMIN_GERAL';
-    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || (dbUser && dbUser.role === 'ECONOMO_REGIONAL');
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'SUPERIOR_REGIONAL' || (dbUser && (dbUser.role === 'ECONOMO_REGIONAL' || dbUser.role === 'SUPERIOR_REGIONAL'));
     const isLocalEco = req.user.role === 'ECONOMO_LOCAL' || (dbUser && dbUser.is_oconomo);
 
     // Fetch userCasaId
@@ -2888,15 +2901,13 @@ app.get('/api/extratos/missionarios', authenticateToken, async (req, res) => {
       WHERE p.status = 'VALIDADO'
     `;
     const params = [];
-    if (!isAdmin) {
-      if (isLocalEco && !isRegional) {
-        // Local Economist only sees their own personal statements
-        query += " AND p.usuario_id = ?";
-        params.push(req.user.id);
-      } else {
-        // Regional Economist sees all statements for their house
+    if (!isAdmin && !isRegional) {
+      if (isLocalEco) {
         query += " AND p.casa_id = ?";
         params.push(userCasaId);
+      } else {
+        query += " AND p.usuario_id = ?";
+        params.push(req.user.id);
       }
     }
     query += " ORDER BY p.mes_referencia DESC, p.updated_at DESC";
@@ -2912,6 +2923,7 @@ app.get('/api/extratos/casas', authenticateToken, async (req, res) => {
     const [userRows] = await db.query('SELECT role, is_oconomo FROM tb_usuarios WHERE id = ?', [req.user.id]);
     const dbUser = userRows[0];
     const isAdmin = req.user.role === 'ADMIN_GERAL';
+    const isRegional = req.user.role === 'ECONOMO_REGIONAL' || req.user.role === 'SUPERIOR_REGIONAL' || (dbUser && (dbUser.role === 'ECONOMO_REGIONAL' || dbUser.role === 'SUPERIOR_REGIONAL'));
 
     // Fetch userCasaId
     const [houseRow] = await db.query(
@@ -2927,7 +2939,7 @@ app.get('/api/extratos/casas', authenticateToken, async (req, res) => {
       WHERE p.status = 'APROVADO'
     `;
     const params = [];
-    if (!isAdmin) {
+    if (!isAdmin && !isRegional) {
       query += " AND p.casa_id = ?";
       params.push(userCasaId);
     }
